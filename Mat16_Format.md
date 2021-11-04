@@ -12,7 +12,7 @@ Known 16-bit mat formats supported by JediKnight:
 
 Note: The following code is in Delphi format
 
-The header for a 16-bit mat is:
+The header for a 16-bit mat is:  
 <code>
     // Straight from the Code Alliance file specs:
     // MAT files contain image information. This could be solid colors(8-bit format) or textures, there could be several textures  
@@ -77,4 +77,4 @@ The header for a 16-bit mat is:
     end;  
     // The TTextureMipmapHeader is followed by actual texture data. The graphics are uncompressed; the top left corner is the start;   
     // lines are read first. The main texture is directly followed by rest MipMaps   
-    </code>
+</code>
