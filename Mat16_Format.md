@@ -21,7 +21,6 @@ Note: The following code is in Delphi format
 
 The header for a 16-bit mat is:  
 
-<code>
     TMatHeader = record
       tag:array[0..3] of ANSIchar;  // 'MAT ' - notice space after MAT
       ver:Longint;                  // Apparently - version = 0x32 ('2')
@@ -78,4 +77,3 @@ The header for a 16-bit mat is:
     end;  
     // The TTextureMipmapHeader is followed by actual texture data. The graphics are uncompressed; the top left corner is the start;   
     // lines are read first. The main texture is directly followed by rest MipMaps   
-</code>
