@@ -10,17 +10,18 @@ Known 16-bit mat formats supported by JediKnight:
 1555 ARGB:  
 ![1555](/img/1555Format.png "1555 Format")
 
+Straight from the Code Alliance file specs:
+MAT files contain image information. This could be solid colors(8-bit format) or textures, there could be several textures  
+or colors in one file(cells). The textures are of the mip-map type. That is one larger texture with several more  
+smaller ones each with less detail. These are used to change the detail of the textures shown to the player by the engine.  
+This is a function of distance as specified in the JKL Section: Header /Mipmap Distances.  
+The file is structured in 2 parts if the MAT is a color one, or 3 parts, if it is a texture one.   
+
 Note: The following code is in Delphi format
 
 The header for a 16-bit mat is:  
-<code>
-    // Straight from the Code Alliance file specs:
-    // MAT files contain image information. This could be solid colors(8-bit format) or textures, there could be several textures  
-    // or colors in one file(cells). The textures are of the mip-map type. That is one larger texture with several more  
-    // smaller ones each with less detail. These are used to change the detail of the textures shown to the player by the engine.  
-    // This is a function of distance as specified in the JKL Section: Header /Mipmap Distances.  
-    // The file is structured in 2 parts if the MAT is a color one, or 3 parts, if it is a texture one.   
 
+<code>
     TMatHeader = record
       tag:array[0..3] of ANSIchar;  // 'MAT ' - notice space after MAT
       ver:Longint;                  // Apparently - version = 0x32 ('2')
