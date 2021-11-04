@@ -14,6 +14,8 @@ Note: The following code is in Delphi format
 
 The header for a 16-bit mat is:  
 <code>
+    
+    TMatHeader = record
     // Straight from the Code Alliance file specs:
     // MAT files contain image information. This could be solid colors(8-bit format) or textures, there could be several textures  
     // or colors in one file(cells). The textures are of the mip-map type. That is one larger texture with several more  
@@ -21,7 +23,6 @@ The header for a 16-bit mat is:
     // This is a function of distance as specified in the JKL Section: Header /Mipmap Distances.  
     // The file is structured in 2 parts if the MAT is a color one, or 3 parts, if it is a texture one.  
 
-    TMatHeader = record
       tag:array[0..3] of ANSIchar;  // 'MAT ' - notice space after MAT
       ver:Longint;                  // Apparently - version = 0x32 ('2')
       mat_Type:Longint;             // 0 = colors uses (TColorHeader) , 1= ?, 2= texture uses (TTextureHeader)
