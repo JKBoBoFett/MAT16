@@ -75,5 +75,6 @@ The header for a 16-bit mat is:
       Pad: array[0..1] of longint;      // {padding = 0 }  
       NumMipMaps: longint;              // {Number of mipmaps in texture largest one first.}  
     end;  
-    // The TTextureMipmapHeader is followed by actual texture data. The graphics are uncompressed; the top left corner is the start;   
-    // lines are read first. The main texture is directly followed by rest MipMaps   
+    // For each texture(Cell), the TTextureMipmapHeader is followed by actual texture data. The graphics are uncompressed; the top left corner is the start;  
+    // lines are read first. The main texture is directly followed by the sub MipMaps(MipMipMaps-1).  
+    // SubMipMaps other then the largest first one are not used in transparent/Alpha or multicelled mats(MipMipMaps=1).  
