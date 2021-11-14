@@ -7,7 +7,7 @@ Known 16-bit mat formats supported by JediKnight:
 565 RGB:  
 ![565](/img/565Format.png "565 Format")
 
-1555 ARGB:  
+5551 RGBA:  
 ![1555](/img/1555Format.png "1555 Format")
 
 Straight from the Code Alliance file specs:  
