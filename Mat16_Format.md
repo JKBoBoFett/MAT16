@@ -7,9 +7,6 @@ Known 16-bit mat formats supported by JediKnight:
 565 RGB:  
 ![565](/img/565Format.png "565 Format")
 
-5551 RGBA:  
-![1555](/img/1555Format.png "1555 Format")
-
 Straight from the Code Alliance file specs:  
 MAT files contain image information. This could be solid colors(8-bit format) or textures, there could be several textures  
 or colors in one file(cells). The textures are of the mip-map type. That is one larger texture with several more  
