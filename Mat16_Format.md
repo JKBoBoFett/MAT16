@@ -21,7 +21,7 @@ The header for a 16-bit mat is:
     TMatHeader = record
       tag:array[0..3] of ANSIchar;  // 'MAT ' - notice space after MAT
       ver:Longint;                  // Apparently - version = 0x32 ('2')
-      mat_Type:Longint;             // 0 = colors uses (TColorHeader) , 1= ?, 2= texture uses (TTextureHeader)
+      mat_Type:Longint;             // 0 = colors uses (TColorHeader) , 1= ?, 2= texture uses (TTextureHeader),3= includes palette dump at end of file
       record_count:Longint;         // record_count {number of textures or colors
       cel_count: Longint;           // cel_count { In color MATs, it's 0, in TX ones, it's equal to numOfTextures
       ColorMode:Longint;            // {ColorMode, Indexed = 0  RGB = 1 RGBA = 2
