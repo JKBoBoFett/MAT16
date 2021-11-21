@@ -52,7 +52,7 @@ The header for a 16-bit mat is:
     TColorHeader = record  
       textype:longint;                 // {0 = color}  
       colornum:longint;                // {Color index from the CMP palette}  
-      pads:array[0..2] of longint;     // {each = 0x3F800000 (check cmp header )}  
+      pads:array[0..3] of longint;     // {each = 0x3F800000 (check cmp header )}  
     end;  
 
     TTextureHeader = record  
