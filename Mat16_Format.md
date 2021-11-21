@@ -6,8 +6,10 @@ Known 16-bit mat formats supported by JediKnight:
 
 565 RGB:  
 ![565](/img/565Format.png "565 Format")  
+
 1555 ARGB (Enabled when TransparentBool =1): 
-![565](/img/1555Format.png "1555 Format")  
+![565](/img/1555Format.png "1555 Format")
+
 Straight from the Code Alliance file specs:  
 MAT files contain image information. This could be solid colors(8-bit format) or textures, there could be several textures  
 or colors in one file(cells). The textures are of the mip-map type. That is one larger texture with several more  
@@ -49,13 +51,13 @@ The header for a 16-bit mat is:
     // Depending on the Type in TMatHeader there will be either record_count*TColorHeader or record_count*TTextureHeader  
     TColorHeader = record  
       textype:longint;                 // {0 = color}  
-      transparent_color:longint;       // {Color index from the CMP palette}  
+      colornum:longint;                // {Color index from the CMP palette}  
       pads:array[0..2] of longint;     // {each = 0x3F800000 (check cmp header )}  
     end;  
 
     TTextureHeader = record  
       textype: longint;                   // { 8= texture}  
-      transparent_color : longint;        // {With 8-bit images, is an index into the palette. .}  
+      transparent_color : longint;        // {unknown use}  
       pads: array[0..2] of longint;  
       unk1tha: word;                      // {ignored by game engine}  
       unk1thb: word;  
@@ -69,10 +71,12 @@ The header for a 16-bit mat is:
     TTextureMipmapHeader = record  
       SizeX: longint;                   // {horizontal size of first MipMap, must be divisable by 2}  
       SizeY: longint;                   // {Vertical size of first MipMap ,must be divisable by 2}  
-      TransparentBool: longint;         // {1: transparent on, else 0: transparent off}  
+      TransparentBool: longint;         // {1: transparent on, else 0: transparent off, in 16-bit enables ARGB1555}  
       Pad: array[0..1] of longint;      // {padding = 0 }  
       NumMipMaps: longint;              // {Number of mipmaps in texture largest one first.}  
     end;  
     // For each texture(Cell), the TTextureMipmapHeader is followed by actual texture data. The graphics are uncompressed; the top left corner is the start;  
     // lines are read first. The main texture is directly followed by the sub MipMaps(MipMipMaps-1).  
     // SubMipMaps other then the largest first one are not used in transparent/Alpha or multicelled mats(MipMipMaps=1).  
+    
+    TCMPPal = array[0..255] of record r, g, b: byte;  end; //palette dump, used only in type 3 mats
