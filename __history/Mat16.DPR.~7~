@@ -1,0 +1,51 @@
+program Mat16;
+
+uses
+  Forms,
+  MAIN in 'MAIN.PAS' {MainForm},
+  mat_read in 'mat_read.pas',
+  Batch in 'Batch.pas' {BatchForm},
+  Util in 'Util.pas',
+  options in 'options.pas' {OptionsForm},
+  about_unit in 'about_unit.pas' {AboutBox},
+  gobgoo in 'gobgoo.pas',
+  gobform in 'gobform.pas' {gobview},
+  ViewtileUnit in 'ViewtileUnit.pas' {ViewTiled},
+  SaveDLGUnit in 'SaveDLGUnit.pas' {MATSaveDlg},
+  mess_frm in 'mess_frm.pas' {mess},
+  Vcl.Themes,
+  Vcl.Styles,
+  MATImage in 'MATImage.pas',
+  Color16 in 'Color16.pas',
+  MATHeaders in 'MATHeaders.pas',
+  BMParrays in 'BMParrays.pas';
+
+// MemCheck;
+{$R *.RES}
+
+{
+  procedure Leak;
+        begin
+            TObject.Create;
+        end;
+ }
+begin
+{
+MemChk;
+        Leak;
+ }
+
+  // Application.CreateForm(TOptionsForm, OptionsForm);
+
+  Application.CreateForm(TMainForm, MainForm);
+  Application.CreateForm(Tgobview, gobview);
+  Application.CreateForm(TViewTiled, ViewTiled);
+  Application.CreateForm(TMATSaveDlg, MATSaveDlg);
+  Application.CreateForm(Tmess, mess);
+  Application.Title := 'Mat16';
+  Application.CreateForm(TBatchForm, BatchForm);
+  Application.CreateForm(TOptionsForm, OptionsForm);
+  Application.CreateForm(TAboutBox, AboutBox);
+  Application.CreateForm(TMATSaveDlg, MATSaveDlg);
+  Application.Run;
+end.

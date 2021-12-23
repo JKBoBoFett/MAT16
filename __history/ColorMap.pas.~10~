@@ -1,0 +1,122 @@
+unit ColorMap;
+interface
+uses Windows,Graphics, SysUtils,CMPHeaders;
+
+procedure SetPal(cmppal: TCMPPal);
+procedure loadcmp(filename: string);
+procedure savepal(filename: string);
+procedure saveact(filename: string);
+procedure LightLevelRemap(LightLevel:integer);
+
+var
+   Pal:     array[0..255] of TRGBQuad;
+   LightTable: array[0..63] of TTable;
+  // defCmppal: TCMPPal;
+
+
+implementation
+
+
+ procedure SetPal(cmppal: TCMPPal);
+var
+  i: integer;
+begin
+  for i := 0 to 255 do
+    with CmpPal[i], Pal[i] do
+    begin
+      rgbRed   := r;
+      rgbGreen := g;
+      rgbBlue  := b;
+    end;
+end;
+
+
+
+
+procedure loadcmp(filename: string);
+ // note: cmp pallete = 768 bytes
+ // phantom menace cmp's start at 150h,336
+var
+
+  cmph: TCMPHeader;
+  JKpal:  TCMPPal;
+  fcmp: file;
+begin
+  AssignFile(fcmp, filename);
+  Reset(fcmp, 1);
+
+  BlockRead(fcmp, cmph, SizeOf(cmph));
+
+  if cmph.sig <> 'CMP ' then
+    Reset(fcmp, 1);    //phantom menace cmp's have no header
+
+
+  BlockRead(fcmp, JKpal, SizeOf(JKpal));
+  BlockRead(fcmp, LightTable, SizeOf(LightTable));
+
+  defCmppal := JKpal;
+
+  CloseFile(fcmp);
+end;
+
+procedure LightLevelRemap(LightLevel:integer);
+var
+i:Integer;
+JKpal:  TCMPPal;
+begin
+  for i := 0 to 255 do
+    with defCmppal[i] do
+    begin
+    JKpal[i].r:= defCmppal[LightTable[LightLevel][i]].r;
+    JKpal[i].g:= defCmppal[LightTable[LightLevel][i]].g;
+    JKpal[i].b:= defCmppal[LightTable[LightLevel][i]].b;
+    end;
+end;
+
+ procedure savepal(filename: string);
+var
+  OutFile: textfile;
+  i: integer;
+begin
+  AssignFile(OutFile, filename);
+  Rewrite(OutFile);
+
+  WriteLn(OutFile, 'JASC-PAL');
+  WriteLn(OutFile, '0100');
+  WriteLn(OutFile, '256');
+
+  for i := 0 to 255 do
+    with defCmppal[i] do
+    begin
+      WriteLn(OutFile, IntToStr(r) + ' ' + IntToStr(g) + ' ' + IntToStr(b));
+    end;
+  CloseFile(OutFile);
+end;
+
+procedure saveact(filename: string);
+var
+  i:     integer;
+  actfile: file;
+  color: longint;
+begin
+  assignfile(actfile, filename);
+  Rewrite(actfile, 1);
+  for i := 0 to 255 do
+    with defCmppal[i] do
+    begin
+      color := r;
+      Blockwrite(actfile, color, 1);
+
+      color := g;
+      Blockwrite(actfile, color, 1);
+
+      color := b;
+      Blockwrite(actfile, color, 1);
+    end;
+
+
+  CloseFile(actfile);
+end;
+
+
+end.

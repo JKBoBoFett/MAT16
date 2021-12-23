@@ -1,0 +1,1750 @@
+unit Main;
+
+interface
+
+uses
+  SysUtils, Windows, Messages, Classes, Graphics, Controls,
+  Forms, Dialogs, StdCtrls, ImgList, Menus, Grids, ComCtrls, ExtCtrls,
+  Buttons, ToolWin, mat_read, ExtDlgs, Util, clipbrd, ShellAPI,
+   gobgoo, Registry, jpeg, SaveDLGUnit, adpMRU,
+  System.ImageList,MATImage,BMParrays,ColorMap,MATHeaders,CMPHeaders;
+
+type
+  TMainForm = class(TForm)
+    MainMenu: TMainMenu;
+    FileOpenItem: TMenuItem;
+    FileSaveItem: TMenuItem;
+    FileExitItem: TMenuItem;
+    HelpAboutItem: TMenuItem;
+    OpenDialog: TOpenDialog;
+    SaveDialog: TSaveDialog;
+    StatusBar1: TStatusBar;
+    ToolBar1: TToolBar;
+    Panel1:  TPanel;
+    SpeedButton1: TSpeedButton;
+    SpeedButton2: TSpeedButton;
+    N1:      TMenuItem;
+    BatchConvertBMPs1: TMenuItem;
+    OpenDialogBatch: TOpenDialog;
+    SpeedButton4: TSpeedButton;
+    Edit1:   TMenuItem;
+    Copy1:   TMenuItem;
+    Paste1:  TMenuItem;
+    N2:      TMenuItem;
+    ClearClipBoard1: TMenuItem;
+    PopupMenu1: TPopupMenu;
+    Copy2:   TMenuItem;
+    Paste2:  TMenuItem;
+    GroupBox2: TGroupBox;
+    Label1:  TLabel;
+    Label4:  TLabel;
+    LabelHeight: TLabel;
+    LabelWidth: TLabel;
+    Label7:  TLabel;
+    LabelFormat: TLabel;
+    Label2:  TLabel;
+    Label3:  TLabel;
+    Cell_ImageList: TImageList;
+    Cell_TrackBar: TTrackBar;
+    N5:      TMenuItem;
+    N6:      TMenuItem;
+    Label16: TLabel;
+    Label17: TLabel;
+    OpenDialogcmp: TOpenDialog;
+    PopupMenu2: TPopupMenu;
+    LoadCMP1: TMenuItem;
+    N7:      TMenuItem;
+    BackGroundColor1: TMenuItem;
+    ColorDialog1: TColorDialog;
+    N8:      TMenuItem;
+    LoadColorMapCMP1: TMenuItem;
+    Tools1:  TMenuItem;
+    AddCell1: TMenuItem;
+    OpenGOBGOO1: TMenuItem;
+    OpenDialog1: TOpenDialog;
+    Label18: TLabel;
+    ScrollBox1: TScrollBox;
+    Image1:  TImage;
+    SaveCMPas1: TMenuItem;
+    SaveCMP: TSaveDialog;
+    ViewTiled1: TMenuItem;
+    GroupBox1: TGroupBox;
+    SaveAlpha: TSaveDialog;
+    ViewasTransparent1: TMenuItem;
+    ViewTiled2: TMenuItem;
+    CloseImage1: TMenuItem;
+    N3:      TMenuItem;
+    Panel2:  TPanel;
+    Zoom1:   TMenuItem;
+    In1:     TMenuItem;
+    Out1:    TMenuItem;
+    Home1:   TMenuItem;
+    ViewMessages1: TMenuItem;
+    BatchConvertGOBMATBMP1: TMenuItem;
+    OpenPic: TOpenPictureDialog;
+    Reopen: TMenuItem;
+    BatchConvertMATBMP1: TMenuItem;
+    Button1: TButton;
+    MipMap_ImageList: TImageList;
+    ToolButton1: TToolButton;
+    Mip_TrackBar: TTrackBar;
+    AddSubMipMap1: TMenuItem;
+    LabelIndex: TLabel;
+    Shape1: TShape;
+    LabelRGB: TLabel;
+    Label5: TLabel;
+    Label6: TLabel;
+    Options1: TMenuItem;
+    gridPalette: TDrawGrid;
+    GroupBox3: TGroupBox;
+    Edit_LightLevel: TEdit;
+    UpDown_LightLevel: TUpDown;
+    GroupBox4: TGroupBox;
+    ComboBox1: TComboBox;  { Save &As... }
+    procedure FileOpen(Sender: TObject);
+    procedure FileSaveAs(Sender: TObject);
+    procedure FileExit(Sender: TObject);
+    procedure HelpContents(Sender: TObject);
+    procedure HelpSearch(Sender: TObject);
+    procedure HelpHowToUse(Sender: TObject);
+    procedure HelpAbout(Sender: TObject);
+    procedure matopen(filename: string);
+    procedure Image1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: integer);
+    procedure BatchConvertBMPs1Click(Sender: TObject);
+    procedure SaveDialogTypeChange(Sender: TObject);
+    procedure Options1Click(Sender: TObject);
+    procedure Copy1Click(Sender: TObject);
+    procedure Paste1Click(Sender: TObject);
+    procedure ClearClipBoard1Click(Sender: TObject);
+    procedure Cell_TrackBarChange(Sender: TObject);
+    procedure Color16BitMat1Click(Sender: TObject);
+    procedure ColorMat1Click(Sender: TObject);
+    procedure AddCellClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure gridPaletteDrawCell(Sender: TObject; Col, Row: integer;
+      Rect: TRect; State: TGridDrawState);
+    procedure FormShow(Sender: TObject);
+    procedure LoadCMP1Click(Sender: TObject);
+    procedure BackGroundColor1Click(Sender: TObject);
+    procedure formresetinfo;
+    procedure OpenGOBGOO1Click(Sender: TObject);
+    procedure JascPaintShopProPAL1Click(Sender: TObject);
+    procedure AdobePhotoshopPaletteACT1Click(Sender: TObject);
+    procedure CmpMerge1Click(Sender: TObject);
+    procedure SaveCMPas1Click(Sender: TObject);
+    procedure ComboBox1Change(Sender: TObject);
+    procedure CMP1Click(Sender: TObject);
+    procedure ViewTiled1Click(Sender: TObject);
+    procedure ViewasTransparent1Click(Sender: TObject);
+    procedure CloseImage1Click(Sender: TObject);
+    procedure FormShortCut(var Msg: TWMKey; var Handled: boolean);
+    procedure In1Click(Sender: TObject);
+    procedure Out1Click(Sender: TObject);
+    procedure Home1Click(Sender: TObject);
+    procedure DoBatchConvert;
+    procedure ViewMessages1Click(Sender: TObject);
+    procedure LoadAlpha1Click(Sender: TObject);
+    procedure adpMRUClick(Sender: TObject; const Filename: String);
+    procedure OpenImage(Filename: String);
+    procedure BatchConvertMATBMP1Click(Sender: TObject);
+    procedure Button1Click(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure Mip_TrackBarChange(Sender: TObject);
+    procedure Panel2CanResize(Sender: TObject; var NewWidth, NewHeight: Integer;
+      var Resize: Boolean);
+    procedure UpDown_LightLevelClick(Sender: TObject; Button: TUDBtnType);
+
+  end;
+
+var
+  MainForm:  TMainForm;
+  Bitmap:    TBitmap;
+  animcnt:   integer;
+  numframes: integer;
+  savefname: string;
+  addcell:   boolean;
+  jkpath:    string;
+  motspath:  string;
+  isbatch:   boolean;
+   adpMRU: TadpMRU;
+  BMPArray: TBMPARRAY;
+
+implementation
+
+uses about_unit, Batch,
+   gobform, ViewtileUnit, mess_frm,options;
+
+{$R *.DFM}
+
+
+procedure TMainForm.FileOpen(Sender: TObject);
+//var
+
+
+//  StartTime, EndTime: DWORD;
+//  filename:string;
+begin
+  OpenPic.Filter     :=
+    'Image files |*.BMP;*.MAT; |Bitmap (*.bmp)|*.BMP|mat texture (*.mat)|*.MAT';
+
+  if OpenPic.Execute then
+       OpenImage(OpenPic.FileName);
+
+end;
+
+
+procedure TmainForm.matopen(filename: string);
+var
+  i, r, cnt, size, totalsize,pos: integer;
+  hdr:   TMatHeader;
+  thdr:  TTextureHeader;
+  tdata: TTextureData;
+  trans: boolean;
+  rgba:  boolean;
+  pal:    TCMPPal;
+  Mat: TMAT;
+  tempBMP:TBitmap;
+  scale:single;
+begin
+  Cell_TrackBar.Position := 0;
+  // Cell_TrackBar.Visible := False;
+  image1.Repaint;
+  trans := False;
+  rgba  := False;
+
+   if Assigned(image1.Picture.Bitmap) then image1.Picture.Bitmap.Assign(nil);
+   // SetPal(defCMPPal);{mat_read}
+   Mat:=TMAT.Create(TFormat.BMP);
+  BMPArray:= Mat.LoadFromFile(filename);
+   Image1.Picture:=nil;
+   image1.Repaint;
+
+
+
+  tempBMP:=Tbitmap.Create;
+  if (Mat.GetMatFormat=(TFormat.RGBA4444)) or (Mat.GetMatFormat=(TFormat.RGBA5551))  then
+    tempBMP.Assign(BMPArray.GetAlphaCellForDisplay(0))
+  else
+     tempBMP.Assign(BMPArray.GetCell(0));
+
+  bitmap:=(BMPArray.GetCell(0));
+  Image1.Picture.Bitmap.Assign(tempBMP);
+//  scale:=image1.ScaleFactor;
+  Panel2.Width:=Image1.Picture.Bitmap.Width;
+  Panel2.Height:=Image1.Picture.Bitmap.Height;
+  Label3.Caption:=Inttostr(BMPArray.GetCellCount);
+  Label17.Caption:=Inttostr(BMPArray.GetMipCount);
+  tempBMP.Free;
+//  BMPArray.Free;
+ // Mat.Free;
+//
+ // tempBMP.Transparent := True;
+//        tempBMP.TransParentColor := tempBMP.canvas.pixels[0,0];
+//        Image1.Canvas.Draw(0,0,tempBMP);
+//        tempBMP.TransparentMode := tmAuto;   // Transparent color now is clDefault =  TColor($20000000);
+//        Image1.Canvas.Draw(0,0,tempBMP);
+//   Image1.Picture.Bitmap.Canvas.Brush.Color := clBlack; // specify your background color
+//Image1.Picture.Bitmap.SetSize(tempBMP.Width, tempBMP.Height);               // now you have a green bitmap
+//Image1.Picture.Bitmap.Canvas.Draw(0, 0, tempBMP); // draw non-transparent parts over green bg.
+// Image1.Picture.Bitmap.TransparentMode := tmAuto;
+// tempBMP.TransparentMode := tmAuto;
+ // Image1.Picture.Bitmap.Canvas.Draw(0, 0, tempBMP,255);
+  // SetPal(defCMPPal);{mat_read}
+  mess.Memo1.Lines:=Mat.HeadersToJSON;
+
+   Cell_TrackBar.max := BMParray.GetCellCount-1;
+   Mip_TrackBar.Max := BMParray.GetMipCount;
+
+   LabelHeight.Caption := IntToStr(BMParray.GetY);
+   LabelWidth.Caption := IntToStr(BMParray.GetX);
+
+   LabelFormat.Caption:=BMParray.fmt;
+
+ //  image1.Picture.Bitmap.PixelFormat:=pf8bit;
+ // image1.Picture.Bitmap.PixelFormat:=pf32bit;
+ // Mat.Free;
+ exit;
+
+  try
+    AssignFile(f, filename); // AssignFile used in ExtDlgs
+
+    Reset(f, 1);
+
+
+
+    BlockRead(f, hdr, SizeOf(hdr));
+    if hdr.tag <> 'MAT ' then
+      raise Exception.Create('Not a valid MAT file!');
+
+
+
+
+
+    //This is a flat color texture
+    if hdr.mat_Type = 0 then
+    begin
+      raise Exception.Create('flat color texture NOT supported!');
+    end
+
+    // This is a bitmap texture.  (mat_type = 2)
+    else
+    begin
+
+      for i := hdr.record_count - 1 downto 0 do
+      begin
+        BlockRead(f, thdr, SizeOf(thdr));
+
+      end;
+
+
+      thdr := thdr;
+
+
+      //read in the texture data
+      BlockRead(f, tdata, SizeOf(tdata));
+
+
+
+
+      //if there is more than one texture in this mat
+      // give an error if addcell = TRUE
+      if hdr.record_count > 1 then
+      begin
+       // rackBarVisible1.Checked := True;
+       // mainform.Height   := 390;
+        Cell_TrackBar.Visible := True;
+        if addcell = True then
+        begin
+          AddCell1.Enabled := True;
+          n5.Enabled    := True;
+          //   Cell_TrackBar.Visible := True;
+          Cell_TrackBar.max := Cell_ImageList.Count;
+          ShowMessage('error : Can not Add Multi-Celled Mats to new cell');
+          exit;
+        end;
+
+        n5.Enabled     := False;
+        AddCell1.Enabled := False;
+        Paste1.Enabled := False;
+        Paste2.Enabled := False;
+        Cell_ImageList.Clear;
+        //   Cell_TrackBar.Visible := True;
+        Cell_TrackBar.Enabled := True;
+        Cell_TrackBar.Max     := hdr.record_count - 1;
+
+        if hdr.bits = 16 then
+        begin
+          if hdr.greenbits = 6 then
+            label18.Caption := '565';
+          if hdr.greenbits = 4 then
+            label18.Caption := '4444';
+
+
+          if hdr.greenbits = 5 then
+          begin
+            label18.Caption := '1555';
+            trans := True;
+            // image1.Transparent:=true;
+           // SaveAlphaChannel1.Enabled := True;
+          end;
+
+          if hdr.greenbits = 4 then
+          begin
+            // label18.Caption := '1555';
+            rgba := True;
+            // image1.Transparent:=true;
+           // SaveAlphaChannel1.Enabled := True;
+          end;
+
+          //label11.caption:='none';
+          LabelHeight.Caption := IntToStr(tdata.SizeY);
+          LabelWidth.Caption := IntToStr(tdata.SizeX);
+          LabelFormat.Caption := '16';
+          label3.Caption := IntToStr(hdr.record_count);
+
+          if tdata.NumMipMaps <> 1 then
+            label17.Caption := IntToStr(tdata.NumMipMaps - 1);
+
+          Cell_ImageList.Height := tdata.SizeY;
+          Cell_ImageList.Width  := tdata.SizeX;
+
+          // Cell_ImageList.Insert(0, Mat16ToBmp(tdata.SizeX, tdata.SizeY,trans), nil);
+          Seek(f, sizeof(hdr) + hdr.record_count * sizeof(thdr));
+
+          //size:=(tdata.SizeX*2)*tdata.SizeY;
+          //totalsize:=0;
+          for i := 0 to hdr.record_count - 1 do
+          begin
+            size      := (tdata.SizeX * 2) * tdata.SizeY;
+            totalsize := 0;
+            BlockRead(f, tdata, SizeOf(tdata));
+            Cell_ImageList.Insert(i, Mat16ToBmp(tdata.SizeX, tdata.SizeY, trans, rgba), nil);
+
+            for r := 0 to tdata.NumMipMaps - 2 do
+            begin
+              size      := size div 4;
+              totalsize := size + totalsize;
+            end;
+          //  size := filepos(f);
+            seek(f, filepos(f) + totalsize);
+            //BlockRead(f, tdata, SizeOf(tdata));
+          end;
+          Cell_ImageList.GetBitmap(Cell_TrackBar.Position, image1.picture.Bitmap);
+          image1.Refresh;
+        end;
+      end;
+
+      //only one texture(frame) in mat - JUST READ IT!
+      if hdr.record_count = 1 then
+      begin
+       // rackBarVisible1.Checked := False;
+       // mainform.Height := 356;
+        Cell_TrackBar.Visible := False;
+        ComboBox1.Enabled := True;
+        n5.Enabled     := True;
+        AddCell1.Enabled := True;
+        Paste1.Enabled := True;
+        Paste2.Enabled := True;
+        Cell_TrackBar.Enabled := False;
+        if hdr.bits = 16 then
+        begin
+          //ComboBox1.text:='None needed(16-bit)';
+          //ComboBox1.Enabled:=False;
+          if hdr.greenbits = 6 then
+            label18.Caption := '565';
+          if hdr.greenbits = 4 then
+            label18.Caption := '4444';
+
+          if hdr.greenbits = 5 then
+          begin
+            label18.Caption := '1555';
+            trans := True;
+            // image1.Transparent:=true;
+           // SaveAlphaChannel1.Enabled := True;
+          end;
+
+          if hdr.greenbits = 4 then
+          begin
+            // label18.Caption := '1555';
+            rgba := True;
+            // image1.Transparent:=true;
+            //SaveAlphaChannel1.Enabled := True;
+          end;
+
+          if tdata.NumMipMaps = 1 then
+            label17.Caption := '0';
+
+          if tdata.NumMipMaps <> 1 then
+            label17.Caption := IntToStr(tdata.NumMipMaps - 1);
+
+          // label11.caption:='none';
+          LabelHeight.Caption := IntToStr(tdata.SizeY);
+          LabelWidth.Caption := IntToStr(tdata.SizeX);
+          LabelFormat.Caption := '16';
+
+
+          bitmap := Mat16ToBmp(tdata.SizeX, tdata.SizeY, trans, rgba);
+
+
+          if Cell_ImageList.Count = 0 then
+          begin
+            Cell_ImageList.Clear;
+            Cell_ImageList.Height := bitmap.Height;
+            Cell_ImageList.Width  := bitmap.Width;
+            Cell_ImageList.Insert(0, bitmap, nil);
+          end;
+
+          if addcell = True then
+          begin
+            if Cell_ImageList.Count > 0 then
+            begin
+
+              cnt := Cell_ImageList.Count;
+
+              //ver .9 update to check image size
+              if (bitmap.Height <> image1.picture.Bitmap.Height) or
+                (bitmap.Width <> image1.picture.Bitmap.Width) then
+              begin
+                cnt := Cell_ImageList.Count;
+                Cell_TrackBar.Max := 0;
+                Cell_TrackBar.Max := cnt - 1;
+                // Cell_TrackBar.Visible := True;
+                Cell_TrackBar.Enabled := True;
+                ShowMessage('Warning : Bitmaps are not the same size!');
+                CloseFile(f);
+                exit;
+              end;
+
+              Cell_ImageList.Insert(cnt, bitmap, nil);
+              cnt := Cell_ImageList.Count;
+              //cnt:=strtoint(label3.caption)+cnt+1;
+
+              //label3.caption:=inttostr(cnt);
+              Cell_TrackBar.Max     := 0;
+              Cell_TrackBar.Max     := cnt - 1;
+              //Cell_ImageList.Insert(strtoint(label3.caption),loadbmp,nil);
+              // Cell_TrackBar.Visible := True;
+              Cell_TrackBar.Enabled := True;
+            end;
+
+
+          end;
+
+          addcell := False;
+
+          label3.Caption := IntToStr(Cell_ImageList.Count);
+          image1.Picture.Bitmap := bitmap;
+        end;
+
+        if hdr.bits <> 16 then
+        begin
+        //type 3 mat's contain there own palette
+            if hdr.mat_Type = 3 then
+            begin
+            //read over the bitmap to get to the palette
+              //and remember the file position
+              pos := filepos(f);
+              bitmap := Mat8ToBmp(tdata.SizeX, tdata.SizeY);
+
+              //read the palette
+              BlockRead(f, pal, SizeOf(pal));
+              defCmppal := pal;
+               gridPalette.Repaint;
+              //go back and read the bitmap with the new palette
+              seek(f, pos);
+              SetPal(defCMPPal);{mat_read}
+              bitmap := Mat8ToBmp(tdata.SizeX, tdata.SizeY);
+            end;
+
+            if hdr.mat_Type = 2 then
+            begin
+              SetPal(defCMPPal);{mat_read}
+              bitmap := Mat8ToBmp(tdata.SizeX, tdata.SizeY);
+            end;
+
+          n5.Enabled     := False;
+          AddCell1.Enabled := False;
+          label3.Caption := IntToStr(hdr.record_count);
+          //label11.caption:='dflt';
+          LabelHeight.Caption := IntToStr(tdata.SizeY);
+          LabelWidth.Caption := IntToStr(tdata.SizeX);
+          LabelFormat.Caption := '8';
+
+          image1.Picture.Bitmap := bitmap;
+
+
+
+        end;
+      end;
+    end;
+
+  except
+    on E: Exception do
+  end;
+
+  CloseFile(f);
+  
+   //memleak fix
+   if Assigned(bitmap) then bitmap.Free;
+end;
+
+
+procedure TMainForm.Mip_TrackBarChange(Sender: TObject);
+begin
+ if Mip_Trackbar.Max <> 0 then
+  begin
+ if Mip_TrackBar.Position = 0 then
+  image1.picture.Bitmap.Assign(BMPArray.GetCell(0))
+ else
+  image1.picture.Bitmap.Assign(BMPArray.GetMip(Mip_TrackBar.Position-1));
+  end;
+end;
+
+procedure TMainForm.FileSaveAs(Sender: TObject);
+
+begin
+  Screen.Cursor := crHourGlass;
+  SaveDialog.FileName := ChangeExt(OpenDialog.FileName, '');
+  if SaveDialog.Execute then
+  begin
+    if UpperCase(ExtractFileExt(SaveDialog.DefaultExt)) = '.MAT' then
+    begin
+        MATSaveDlg.Show;
+    end;
+
+
+
+
+    if UpperCase(ExtractFileExt(SaveDialog.FileName)) = '.BMP' then
+    begin
+      if image1.picture.bitmap.PixelFormat <> pf8bit then
+      begin
+//       // if optionsform.RadioGroup3.ItemIndex = 0 then
+//          image1.picture.bitmap.PixelFormat := pf24bit;
+//
+//        if optionsform.RadioGroup3.ItemIndex = 1 then
+//          image1.picture.bitmap.PixelFormat := pf16bit;
+//
+//        if optionsform.RadioGroup3.ItemIndex = 2 then
+//          image1.picture.bitmap.PixelFormat := pf15bit;
+      end;
+
+
+      image1.picture.bitmap.SaveToFile(SaveDialog.FileName);
+    end;
+
+
+
+    //Screen.Cursor := crDefault;
+  end;
+  StatusBar1.Panels[1].Text := '';
+  //StatusBar1.Panels[1].Text := 'Saved ' + ExtractFileName(SaveDialog.FileName);
+  Screen.Cursor := crDefault;
+
+end;
+
+
+procedure TMainForm.FileExit(Sender: TObject);
+begin
+  Close;
+end;
+
+procedure TMainForm.HelpContents(Sender: TObject);
+begin
+  Application.HelpCommand(HELP_CONTENTS, 0);
+end;
+
+procedure TMainForm.HelpSearch(Sender: TObject);
+const
+  EmptyString: PChar = '';
+begin
+  Application.HelpCommand(HELP_PARTIALKEY, longint(EmptyString));
+end;
+
+procedure TMainForm.HelpHowToUse(Sender: TObject);
+begin
+  Application.HelpCommand(HELP_HELPONHELP, 0);
+end;
+
+procedure TMainForm.HelpAbout(Sender: TObject);
+begin
+  AboutBox.ShowModal;
+end;
+
+procedure TMainForm.Image1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: integer);
+const
+  PixelCountMax = 65536;  // 2048 MAX WIDTH
+type
+PWordArray = ^TWordArray;
+  TWordArray = packed array[0..16383] of Word;
+
+  TRGBQuadArray = packed array[0..PixelCountMax - 1] of TRGBQuad;
+  pRGBQuadArray = ^TRGBQuadArray;
+var
+  TargetColor: TColor;
+  xActual:     double;
+  yActual:     double;
+  index,scaledX,scaledY: integer;
+  Row: pByteArray;
+  row16:PWordArray;
+  inrow32: pRGBQuadArray;
+  R,G,B,A:Integer;
+  src16:word;
+  PalEntry:  TPaletteEntry;
+
+begin
+  xActual := X;
+  yActual := Y;
+
+   A:=-1;
+   index:=-1;
+
+  if Image1.Picture.Bitmap.Height <> 0 then
+   begin
+  //xy semms to be fliped from bitmap xy
+   scaledY:=Trunc(yActual / (((Image1.Height)*1.0) / ((Image1.Picture.Bitmap.Height)*1.0)));
+   scaledX:=Trunc(xActual / (((Image1.Width)*1.0) / ((Image1.Picture.Bitmap.Width)*1.0)));
+
+   if Image1.Picture.Bitmap.PixelFormat = pf8bit then
+    begin
+     Row := Image1.Picture.Bitmap.ScanLine[scaledY];
+     index:=Row[scaledX];
+
+     GetPaletteEntries(Image1.Picture.Bitmap.Palette, index, 1,PalEntry);
+     R:= PalEntry.peRed;
+     G:= PalEntry.peGreen;
+     B:= PalEntry.peBlue;
+
+     TargetColor:=rgb(PalEntry.peRed,PalEntry.peGreen,PalEntry.peBlue);
+    end;
+
+    labelindex.Caption :=IntToStr(index);
+
+   if Image1.Picture.Bitmap.PixelFormat = pf16bit then
+   begin
+    TargetColor := Image1.Picture.Bitmap.Canvas.Pixels[scaledX, scaledY];
+    Shape1.Brush.Color := TargetColor;
+
+    if imageformat =   TFormat.RGB565 then
+    begin
+      Row16 := Image1.Picture.Bitmap.ScanLine[scaledY];
+      src16:=Row16[scaledX];
+
+      R:= ((src16 and 63488) shr 11);
+      G:= ((src16 and 2016) shr 5);
+      B:= ((src16 and 31) shr 0);
+    end;
+
+   end;
+
+   if Image1.Picture.Bitmap.PixelFormat = pfCustom then
+    begin
+      TargetColor := Image1.Picture.Bitmap.Canvas.Pixels[scaledX, scaledY];
+      Shape1.Brush.Color := TargetColor;
+
+      if imageformat =   TFormat.ARGB1555 then
+      begin
+        Row16 := Image1.Picture.Bitmap.ScanLine[scaledY];
+        src16:=Row16[scaledX];
+
+        A:= ((src16 and 32768) shr 15);
+        R:= ((src16 and 31744) shr 10);
+        G:= ((src16 and 992) shr 5);
+        B:= ((src16 and 31) shr 0);
+      end;
+
+    end;
+
+   if bitmap.PixelFormat = pf32bit then
+    begin
+
+    if imageformat =   TFormat.RGBA4444 then
+    begin
+      inrow32 := bitmap.ScanLine[scaledY];
+
+      R := inrow32[scaledX].rgbRed shr 4;
+      G := inrow32[scaledX].rgbGreen shr 4;
+      B := inrow32[scaledX].rgbBlue shr 4;
+      A := inrow32[scaledX].rgbReserved shr 4;
+
+      TargetColor:=rgb(inrow32[scaledX].rgbRed,
+      inrow32[scaledX].rgbGreen,
+      inrow32[scaledX].rgbBlue);
+    end;
+
+    if imageformat =   TFormat.RGBA5551 then
+    begin
+      inrow32 := bitmap.ScanLine[scaledY];
+
+      R := inrow32[scaledX].rgbRed shr 5;
+      G := inrow32[scaledX].rgbGreen shr 5;
+      B := inrow32[scaledX].rgbBlue shr 5;
+      A := inrow32[scaledX].rgbReserved shr 7;
+
+      TargetColor:=rgb(inrow32[scaledX].rgbRed,
+      inrow32[scaledX].rgbGreen,
+      inrow32[scaledX].rgbBlue);
+    end;
+  end;
+
+    Shape1.Brush.Color := TargetColor;
+
+    labelRGB.Caption    := IntToStr(R) +', '+
+                           IntToStr(G) +', '+
+                           IntToStr(B) +', '+
+                           IntToStr(A);
+
+    StatusBar1.Panels[0].Text :=
+    '(' + IntToStr(scaledX) + ', ' + IntToStr(scaledY) + ')';
+   end;
+end;
+
+procedure TMainForm.DoBatchConvert;
+var
+  I:    integer;
+  BatchBitmap: TBitmap;
+  savename: string;
+  StartTime, EndTime: DWORD;
+begin
+  MATSaveDlg.hide;
+ // optionsform.readoptions;
+
+  if OpenDialogBatch.Execute then
+  begin
+    Screen.Cursor := crHourGlass;
+
+    BatchForm.ProgressBar1.Position := 0;
+    BatchForm.Show;
+
+    BatchForm.Memo1.Lines.Clear;
+    BatchForm.Memo1.Lines.Add(IntToStr(OpenDialogBatch.Files.Count) +
+      ' File(s) selected to convert');
+
+
+    BatchForm.ProgressBar1.Max := OpenDialogBatch.Files.Count;
+    starttime := GetTickCount;
+    for I := 0 to OpenDialogBatch.Files.Count - 1 do
+    begin
+      if UpperCase(ExtractFileExt(OpenDialogBatch.Files[I])) = '.BMP' then
+      begin
+        //MATSaveDlg.Show;
+         BatchBitmap := TBitmap.Create;
+        application.ProcessMessages;
+
+
+       // if optionsform.checkbox4.Checked then
+        //         BatchBitmap:=BMP_Open(OpenDialogBatch.Files[I])
+
+     // else
+
+     // BatchBitmap.LoadFromFile(OpenDialogBatch.Files[I]);
+
+
+      //  BatchBitmap.Assign(BMP_Open(OpenDialogBatch.Files[I]));
+       //  BatchBitmap.LoadFromFile(OpenDialogBatch.Files[I]);
+        BatchBitmap.PixelFormat := pf24bit;
+
+        savename := ChangeExt(OpenDialogBatch.Files[I], '.mat');
+
+
+//       // if optionsform.checkbox2.Checked = True then
+//          BmptoMat16(checkBMPsize(BatchBitmap), savename,
+//            SaveDLGUnit.MATSaveDlg.Save_OptionsRadioGroup.ItemIndex,
+//            SaveDLGUnit.MATSaveDlg.DitherRadioGroup1.ItemIndex);
+//
+//       // if optionsform.checkbox2.Checked = False then
+//          BmptoMat16(BatchBitmap, savename,
+//            SaveDLGUnit.MATSaveDlg.Save_OptionsRadioGroup.ItemIndex,
+//            SaveDLGUnit.MATSaveDlg.DitherRadioGroup1.ItemIndex);
+
+
+        BatchForm.Memo1.Lines.Add('Saved ' + ExtractFileName(savename));
+        BatchForm.ProgressBar1.Position := I + 1;
+
+
+         BatchBitmap.Free;
+
+      end;
+    end;
+    endtime := GetTickCount;
+    //BatchForm.Memo1.Lines.Add('-Done-');
+    BatchForm.Memo1.Lines.Add('-Done- ' + IntToStr(EndTime - StartTime) + ' mS');
+    Screen.Cursor := crDefault;
+  end;
+
+end;
+
+procedure TMainForm.BatchConvertBMPs1Click(Sender: TObject);
+//var
+//  I, Count:    integer;
+//  BatchBitmap: TBitmap;
+//  savename, mcfname: string;
+//  StartTime, EndTime: DWORD;
+begin
+  // isbatch:=TRUE;
+
+  MATSaveDlg.Show;
+  isbatch := True;
+
+end;
+
+
+procedure TMainForm.BatchConvertMATBMP1Click(Sender: TObject);
+
+ var
+  i: integer;
+  savebitmap: Tbitmap;
+  bestcmp, gpath, mpath, fext, mname: string;
+  f: file;
+
+   matFormatHeader:TMatHeader;
+begin
+
+OpenDialogBatch.Filter     :=
+    'mat texture (*.mat)|*.MAT';
+ // savebitmap := Tbitmap.Create;
+  gpath := ExtractFilePath(label1.Caption);
+  fext  := ExtractName(label1.Caption);
+  fext  := ChangeFileExt(fext, '');
+  gpath := gpath + fext;
+  Screen.Cursor := crHourGlass;
+  CreateDir(gpath);
+  //BatchForm.Show;
+
+  i:=0;
+  if OpenDialogBatch.Execute then
+  begin
+    gpath := ExtractFilePath(OpenDialogBatch.Files[I]);
+    Screen.Cursor := crHourGlass;
+
+    BatchForm.ProgressBar1.Position := 0;
+    BatchForm.Show;
+
+    BatchForm.Memo1.Lines.Clear;
+    BatchForm.Memo1.Lines.Add(IntToStr(OpenDialogBatch.Files.Count) +
+      ' File(s) selected to convert');
+
+
+    BatchForm.ProgressBar1.Max := OpenDialogBatch.Files.Count;
+   // starttime := GetTickCount;
+    for I := 0 to OpenDialogBatch.Files.Count - 1 do
+    begin
+    BatchForm.ProgressBar1.Position := i;
+    //savebitmap := Tbitmap.Create;
+    //savebitmap:=nil;
+//    bestcmp    := GetbestCMP(OpenDialogBatch.Files[I], label1.Caption);
+//    ReadCMPfromGOB(label1.Caption, bestcmp);
+//    mainform.gridPalette.Repaint;
+
+     AssignFile(f, OpenDialogBatch.Files[I]);
+     Reset(f, 1);
+     BlockRead(f, matFormatHeader, SizeOf(matFormatHeader));
+
+     if matFormatHeader.alpha_bpp = 1 then
+          BatchForm.Memo1.Lines.Add(OpenDialogBatch.Files[I]+' ' + matFormatHeader.alpha_bpp.ToString() + ' ');
+
+//    saveBitmap:=readmat(OpenDialogBatch.Files[I]);
+//    mname      := ExtractName(OpenDialogBatch.Files[I]);
+//    mname      := ChangeFileExt(mname, '.BMP');
+//    mpath      := gpath + mname;
+//    saveBitmap.SaveToFile(mpath);
+//
+//    BatchForm.Memo1.Lines.Add('Saved ' + mpath + ' cmp:' + bestcmp);
+    application.ProcessMessages;
+
+    saveBitmap.Free;
+
+  end;
+  end;
+  BatchForm.Memo1.Lines.Add('-Done-');
+  Screen.Cursor := crDefault;
+
+  //if Assigned(saveBitmap) then saveBitmap.Free;
+
+end;
+
+procedure TMainForm.Button1Click(Sender: TObject);
+var
+ Mat: TMAT;
+ Test:Tbitmap;
+begin
+   Test:=Tbitmap.Create;
+//   Test.PixelFormat := pf32bit;
+//  Test.HandleType :=   bmDIB;
+   Mat:=TMAT.Create(TFormat.COLOR8);
+   Mat.AddColorCell(255);
+  // Mat.AddCellFromBMP(main.MainForm.Image1.Picture.Bitmap);
+
+ //  test.LoadFromFile('D:\TestBMP\red.bmp');
+ //  Mat.AddCellFromBMP(main.MainForm.Image1.Picture.Bitmap);
+//   test.LoadFromFile('D:\TestBMP\green.bmp');
+//test.LoadFromFile('D:\TestBMP\blue_mip1.bmp');
+//Mat.AddSubMipMapFromBMP(test);
+
+//test.LoadFromFile('D:\TestBMP\blue_mip2.bmp');
+//Mat.AddSubMipMapFromBMP(test);
+
+//test.LoadFromFile('D:\TestBMP\blue_mip3.bmp');
+//Mat.AddSubMipMapFromBMP(test);
+//   Mat.AddCellFromBMP(test);
+//   test.LoadFromFile('D:\TestBMP\blue.bmp');
+//   Mat.AddCellFromBMP(test);
+
+   Mat.SaveMat('D:\TestBMP\test.mat');
+  // Mat.matFormat:=TFormat.RGB565;
+   Mat.Free;
+   Test.Free;
+
+end;
+
+procedure TMainForm.SaveDialogTypeChange(Sender: TObject);
+begin
+  if SaveDialog.filterindex = 1 then
+        SaveDialog.DefaultEXt := '.mat';
+
+
+  if SaveDialog.filterindex = 2 then
+        SaveDialog.DefaultEXt := '.bmp';
+
+end;
+
+
+
+procedure TMainForm.UpDown_LightLevelClick(Sender: TObject; Button: TUDBtnType);
+var
+ll:integer;
+tmpbmp:tbitmap;
+begin
+
+// orgCMPPAL:=defCMPPal;
+edit_LightLevel.Text:=inttostr(UpDown_LightLevel.Position);
+
+// ll:=LightTable[UpDown_LightLevel.Position][255];
+// label8.Caption:=inttostr(ll);
+
+ // Shape1.Brush.Color := (2 shl 24) + rgb(defCmppal[ll].r, defCmppal[ll].g, defcmppal[ll].b);
+
+                      LightLevelRemap(UpDown_LightLevel.Position);
+  gridPalette.Repaint;
+
+
+  if image1.Picture.Bitmap.PixelFormat = pf8bit then
+     begin
+      tmpbmp:=tbitmap.create;
+      tmpbmp.Assign(image1.Picture.Bitmap);
+      image1.Picture.Bitmap.Free;
+      image1.Picture.Bitmap.Assign(WriteCMPtoBMP(defCMPPal,tmpbmp) );
+      tmpbmp.Free;
+      image1.Repaint;
+     end;
+end;
+
+procedure TMainForm.Options1Click(Sender: TObject);
+begin
+  Optionsform.Show;
+ end;
+
+procedure TMainForm.Copy1Click(Sender: TObject);
+var
+
+  MyFormat: word;
+  AData:    THandle;
+  APalette: HPALETTE;
+begin
+  Image1.picture.Bitmap.SaveToClipBoardFormat(MyFormat, AData, APalette);
+  ClipBoard.SetAsHandle(MyFormat, AData);
+end;
+
+procedure TMainForm.Panel2CanResize(Sender: TObject; var NewWidth,
+  NewHeight: Integer; var Resize: Boolean);
+
+begin
+ // AspectRatio:=Height/Width;
+ // NewHeight:=round(AspectRatio*NewWidth);
+end;
+
+procedure TMainForm.Paste1Click(Sender: TObject);
+begin
+  Image1.picture.bitmap.LoadFromClipBoardFormat(cf_BitMap,
+    ClipBoard.GetAsHandle(cf_Bitmap), 0);
+  Image1.Repaint;
+  Image1.Picture.bitmap.PixelFormat := pf24bit;
+end;
+
+
+
+
+procedure TMainForm.ClearClipBoard1Click(Sender: TObject);
+begin
+  ClipBoard.Clear;
+end;
+
+
+procedure TMainForm.Cell_TrackBarChange(Sender: TObject);
+begin
+ if Cell_TrackBar.Max <> 0 then
+  begin
+  Paste1.Enabled := False;
+  Paste2.Enabled := False;
+
+  Image1.Picture:=nil;
+   image1.Repaint;
+
+  if BMPArray.fmt ='16-bit RGBA4444' then
+    image1.picture.Bitmap.Assign(BMPArray.GetAlphaCellForDisplay(Cell_TrackBar.Position))
+  else
+     image1.picture.Bitmap.Assign(BMPArray.GetCell(Cell_TrackBar.Position));
+
+  // copy of original bmp for xy color mapping
+  bitmap:=(BMPArray.GetCell(Cell_TrackBar.Position));
+
+  image1.Repaint;
+  end;
+end;
+
+procedure TMainForm.Color16BitMat1Click(Sender: TObject);
+begin
+  //if ColorDialog1.Execute then
+  // begin
+  // Image1.Canvas.Brush.Color:=ColorDialog1.Color;
+  // Image1.Canvas.FillRect(Rect(0,0,100,100));
+
+  //Image1.Repaint;
+  //end;
+end;
+
+procedure TMainForm.ColorMat1Click(Sender: TObject);
+begin
+  //Createnewimage.show;
+end;
+
+procedure TMainForm.AddCellClick(Sender: TObject);
+var
+  cnt:     integer;
+  loadbmp: Tbitmap;
+  loadjpg: TJPegImage;
+
+begin
+ // mainform.Height   := 390;
+  Cell_TrackBar.Visible := True;
+ // rackBarVisible1.Checked := True;
+
+  if Openpic.Execute then
+  begin
+    Screen.Cursor := crHourGlass;
+
+    if UpperCase(ExtractFileExt(Openpic.FileName)) = '.MAT' then
+    begin
+      addcell := True;
+      matopen(Openpic.FileName);
+      addcell := False;
+      Cell_TrackBar.Position := Cell_TrackBar.max;
+      Paste1.Enabled := False;
+      Paste2.Enabled := False;
+    end;
+
+    if UpperCase(ExtractFileExt(Openpic.FileName)) = '.BMP' then
+    begin
+      loadbmp := Tbitmap.Create;
+
+     
+//      if optionsform.checkbox4.Checked then
+//                 loadbmp.Assign(BMP_Open(OpenPic.FileName))
+//
+//      else
+
+      loadbmp.LoadFromFile(OpenPic.FileName);
+
+
+
+      cnt := BMPArray.GetCellCount;
+
+      //if cnt > 0 then
+      if (loadbmp.Height <> image1.picture.Bitmap.Height) or
+        (loadbmp.Width <> image1.picture.Bitmap.Width) then
+      begin
+        ShowMessage('Warning : Bitmaps are not the same size!');
+        Screen.Cursor := crDefault;
+        exit;
+      end;
+
+      Cell_ImageList.Insert(cnt, loadbmp, nil);
+      BMPArray.AddCellFromBMP(loadbmp);
+      cnt := BMPArray.GetCellCount;
+      //cnt:=strtoint(label3.caption)+cnt+1;
+
+      label3.Caption    := IntToStr(cnt);
+      Cell_TrackBar.Max     := 0;
+      Cell_TrackBar.Max     := cnt - 1;
+      //Cell_ImageList.Insert(strtoint(label3.caption),loadbmp,nil);
+      //  Cell_TrackBar.Visible := True;
+      Cell_TrackBar.Enabled := True;
+      //image1.Picture.Bitmap:=checkBMPsize(loadbmp);
+
+      Cell_TrackBar.Position := Cell_TrackBar.max;
+      //Cell_ImageList.GetBitmap(Cell_TrackBar.Position, image1.picture.Bitmap);
+       image1.picture.Bitmap.Assign(BMPArray.GetCell(Cell_TrackBar.Position));
+      image1.Repaint;
+      Paste1.Enabled := False;
+      Paste2.Enabled := False;
+      if not poweroftwo(image1.Picture.Bitmap.Width) then
+      begin
+        //ShowMessage('Warning : BitMap Width Must be a power of 2');
+      end;
+
+
+
+      LabelWidth.Caption := IntToStr(image1.Picture.Bitmap.Width);
+      LabelHeight.Caption := IntToStr(image1.Picture.Bitmap.Height);
+     // image1.Picture.Bitmap.PixelFormat := pf24bit;
+      //Savefname:=ChangeExt(OpenDialog.FileName,'.mat');
+      loadbmp.Free;
+    end;
+
+
+
+
+    if UpperCase(ExtractFileExt(Openpic.FileName)) = '.JPG' then
+    begin
+
+    end;
+
+
+    MainForm.Caption := 'Mat16 - ' + OpenDialog.FileName;
+
+    Screen.Cursor := crDefault;
+  end;
+
+end;
+
+procedure TMainForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+//if Assigned(BMPArray) then
+//   BMPArray.Free;
+end;
+
+procedure TMainForm.FormCreate(Sender: TObject);
+var
+  i:  integer;
+  ge: TGob2Entry;
+  gh: TGOB2Header;
+ dir, Name: string;
+//  Reg:      TRegistry;
+
+  
+begin
+  adpMRU:=TadpMRU.Create(mainform);
+  adpMRU.ParentMenuItem:=reopen;
+  adpMRU.OnClick:= adpMRUClick;
+  adpmru.RegistryPath:='\Software\Jedi Dreams\Mat16\mru';
+  adpmru.MaxItems := 10;
+
+
+  isbatch := False;
+ // Reg     := TRegistry.Create;
+
+ // Reg.RootKey := HKEY_LOCAL_MACHINE;
+
+//  try
+//    Reg.OpenKey('\Software\LucasArts Entertainment Company\JediKnight\v1.0', False);
+//    JKPath:=Reg.ReadString('Install Path');
+//    Reg.CloseKey;
+//
+//    Reg.OpenKey('\SOFTWARE\LucasArts Entertainment Company LLC\Mysteries of the Sith\v1.0', False);
+//    motsPath := Reg.ReadString('Install Path');
+//    Reg.CloseKey;
+//
+//  finally
+//    Reg.Free;
+//   end;
+
+
+//  if  DirectoryExists(JKPath) then
+//        begin
+//        opendialog1.InitialDir := jkPath;
+ JKPath:= Optionsform.GetContainerPath;
+        try
+        AssignFile(f, jkpath );
+        Reset(f, 1);
+        BlockRead(f, gh, SizeOf(gh));
+
+            if gh.magic <> 'GOB ' then
+               raise Exception.Create('not a GOB 2.0 file');
+
+            for i := 0 to gh.NEntries - 1 do
+              begin
+              BlockRead(f, ge, SizeOf(ge));
+              Dir := ExtractFileExt(ge.Name);
+              if UpperCase(ExtractFileExt(Dir)) = '.CMP' then
+                  combobox1.Items.Append('(Jedi)' + extractfilename(ge.Name));
+              end;
+        finally
+        CloseFile(f);
+        end;
+//        end;
+
+
+
+  //////////////////////////////////////
+  //check for mots
+
+//  if DirectoryExists(motsPath) then
+//  begin
+//    try
+//    AssignFile(f, motspath + '\Resource\JKMRES.GOO');
+//    Reset(f, 1);
+//    BlockRead(f, gh, SizeOf(gh));
+//
+//      if gh.magic <> 'GOB ' then
+//        raise Exception.Create('not a GOB 2.0 file');
+//
+//      for i := 0 to gh.NEntries - 1 do
+//      begin
+//        BlockRead(f, ge, SizeOf(ge));
+//
+//        Dir := ExtractFileExt(ge.Name);
+//        if UpperCase(ExtractFileExt(Dir)) = '.CMP' then
+//          combobox1.Items.Append('(MotS)' + extractfilename(ge.Name));
+//      end;
+//    finally
+//      CloseFile(f);
+//    end;
+//    end;
+
+  n5.Enabled := False;
+  AddCell1.Enabled := False;
+  addcell    := False;
+   orgCMPPAL:= defCmppal;
+end;
+
+procedure TMainForm.gridPaletteDrawCell(Sender: TObject; Col, Row: integer;
+  Rect: TRect; State: TGridDrawState);
+var
+  i, rowi, coli: integer;
+begin
+  rowi := -1;
+  coli := 0;
+
+  for i := 0 to 255 do
+  begin
+    Inc(rowi);
+
+    if rowi = 16 then
+    begin
+      rowi := 0;
+      Inc(coli);
+    end;
+
+
+
+    if (row = coli) and (col = rowi) then
+    begin
+      gridPalette.canvas.Brush.Color :=
+        (2 shl 24) + rgb(defCmppal[i].r, defCmppal[i].g, defcmppal[i].b);
+      gridPalette.canvas.FillRect(Rect);
+    end;
+  end;
+
+     if (gdFocused in State) then
+  begin
+   i := Row * gridPalette.ColCount + Col;
+    LabelIndex.Caption:= 'Cell ' + InttoStr(i);
+
+    Shape1.Brush.Color := (2 shl 24) + rgb(defCmppal[i].r, defCmppal[i].g, defcmppal[i].b);
+
+    labelRGB.Caption    := IntToStr(defCmppal[i].r) +', '+
+                         IntToStr(defCmppal[i].g) +', '+
+                         IntToStr(defcmppal[i].b) +', '+
+                         IntToStr(-1);
+  end;
+    // gridPalette.ogoDrawFocusSelected = True
+end;
+
+procedure TMainForm.FormShow(Sender: TObject);
+begin
+  //optionsform.readoptions;
+end;
+
+procedure TMainForm.LoadCMP1Click(Sender: TObject);
+begin
+ // CMPPanelVisible1.Checked := True;
+  //mainform.Width    := 438;
+  groupbox1.Visible := True;
+  groupbox2.Visible := True;
+  if OpenDialogCMP.Execute then
+  begin
+    // Label11.caption:='n/a';
+    Screen.Cursor := crHourGlass;
+
+    if UpperCase(ExtractFileExt(OpenDialogcmp.FileName)) = '.CMP' then
+    begin
+      loadcmp(OpenDialogcmp.FileName,0);
+      gridPalette.Repaint;
+
+      if image1.picture.bitmap.PixelFormat = pf8bit then
+      begin
+        if UpperCase(ExtractFileExt(OpenDialog.FileName)) = '.MAT' then
+          matopen(OpenDialog.FileName);
+        //  Label11.caption:=ExtractFileName(OpenDialogcmp.FileName);
+        //image1.picture.bitmap.loadfromfile(opendialog.filename);
+      end;
+    end;
+
+    Screen.Cursor := crDefault;
+  end;
+end;
+
+procedure TMainForm.BackGroundColor1Click(Sender: TObject);
+begin
+  if ColorDialog1.Execute then
+  begin
+    Panel1.color := ColorDialog1.Color;
+    Panel1.Repaint;
+  end;
+end;
+
+procedure TMainForm.formresetinfo;
+begin
+  Cell_ImageList.Clear;
+  // Cell_TrackBar.Visible := False;
+  //label15.Caption := '';
+  label17.Caption := '0';
+end;
+
+procedure TMainForm.OpenGOBGOO1Click(Sender: TObject);
+begin
+
+  //SaveAlphaChannel1.Enabled := False;
+//  optionsform.readoptions;
+  image1.Transparent := False;
+  VIewasTransparent1.Checked := False;
+  image1.Picture.Bitmap.Width := 32;
+  image1.Picture.Bitmap.Height := 32;
+  image1.Picture.Bitmap.Assign(nil);
+  Cell_ImageList.Clear;
+  // Cell_TrackBar.Visible:=False;
+
+
+  image1.Transparent := False;
+  VIewasTransparent1.Checked := False;
+  if OpenDialog1.Execute then
+  begin
+    //Screen.Cursor := crHourGlass;
+
+    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.GOB' then
+    begin
+      gobview.opengob(OpenDialog1.FileName);
+      gobview.Show;
+      gobview.Label1.Caption := OpenDialog1.Filename;
+    end;
+
+    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.GOO' then
+    begin
+      gobview.opengob(OpenDialog1.FileName);
+      gobview.Show;
+      gobview.Label1.Caption := OpenDialog1.Filename;
+    end;
+
+     if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.BAF' then
+    begin
+      gobview.openbaf(OpenDialog1.FileName);
+      gobview.Show;
+      gobview.Label1.Caption := OpenDialog1.Filename;
+    end;
+  end;
+end;
+
+procedure TMainForm.JascPaintShopProPAL1Click(Sender: TObject);
+//var
+//  i: integer;
+//  OutFile: textfile;
+begin
+//  AssignFile(OutFile, 'c:\test.pal');
+//  Rewrite(OutFile);
+//
+//  WriteLn(OutFile, 'JASC-PAL');
+//  WriteLn(OutFile, '0100');
+//  WriteLn(OutFile, '256');
+//
+//  for i := 0 to 255 do
+//    with defCmppal[i] do
+//    begin
+//      WriteLn(OutFile, IntToStr(r) + ' ' + IntToStr(g) + ' ' + IntToStr(b));
+//    end;
+//  CloseFile(OutFile);
+end;
+
+procedure TMainForm.AdobePhotoshopPaletteACT1Click(Sender: TObject);
+//var
+//  i:     integer;
+//  actfile: file;
+//  color: longint;
+//  bytesread: integer;
+begin
+//  assignfile(actfile, 'c:\test.act');
+//  Rewrite(actfile, 1);
+//  for i := 0 to 255 do
+//    with defCmppal[i] do
+//    begin
+//      color := r;
+//      Blockwrite(actfile, color, bytesread);
+//
+//      color := g;
+//      Blockwrite(actfile, color, bytesread);
+//
+//      color := b;
+//      Blockwrite(actfile, color, bytesread);
+//    end;
+//  CloseFile(actfile);
+end;
+
+procedure TMainForm.CmpMerge1Click(Sender: TObject);
+begin
+  //form1.show;
+end;
+
+procedure TMainForm.SaveCMPas1Click(Sender: TObject);
+begin
+  Screen.Cursor    := crHourGlass;
+  SaveCMP.FileName := ChangeExt(OpenDialog.FileName, '');
+  if SaveCMP.Execute then
+  begin
+    //filter1=pal
+    if SaveCMP.FilterIndex = 1 then
+    begin
+      SaveCMP.DefaultEXt := '.pal';
+      savepal(SaveCMP.FileName);
+    end;
+
+    //filter2=act
+    if SaveCMP.FilterIndex = 2 then
+    begin
+      SaveCMP.DefaultEXt := '.act';
+      saveact(SaveCMP.FileName);
+    end;
+  end;
+  Screen.Cursor := crDefault;
+end;
+
+procedure TMainForm.ComboBox1Change(Sender: TObject);
+var
+  cmp: string;
+  pos:longint;
+begin
+  cmp := Copy(Extractname(ComboBox1.Items.Strings[comboBox1.ItemIndex]), 0, 6);
+
+  if cmp = '(Jedi)' then
+    begin
+    pos:=GetGOBFileOffset( jkpath, Copy(Extractname(ComboBox1.Items.Strings[comboBox1.ItemIndex]), 7, 30));
+
+    loadcmp(jkpath,pos);
+ //   LightLevelRemap(63);
+//    ReadCMPfromGOB(jkpath,
+//      Copy(Extractname(ComboBox1.Items.Strings[comboBox1.ItemIndex]), 7, 30));
+    end;
+  if cmp = '(MotS)' then
+    ReadCMPfromGOB(motspath + '\Resource\JKMRES.GOO',
+      Copy(Extractname(ComboBox1.Items.Strings[comboBox1.ItemIndex]), 7, 30));
+
+  //if LabelFormat.caption='8'  then
+  // begin
+  SetPal(defCMPPal);{mat_read}
+  // image1.Picture.Bitmap.Palette:=Mat8ToBmp(strtoint(LabelWidth.caption),strtoint(LabelHeight.caption));
+  // end;
+   LightLevelRemap(63);
+  gridPalette.Repaint;
+end;
+
+
+procedure TMainForm.CMP1Click(Sender: TObject);
+begin
+  //form1.show;
+end;
+
+procedure TMainForm.ViewTiled1Click(Sender: TObject);
+begin
+  if not image1.picture.Bitmap.Empty then
+    viewtiled.Show;
+end;
+
+
+
+procedure TMainForm.ViewasTransparent1Click(Sender: TObject);
+begin
+
+  if VIewasTransparent1.Checked = False then
+    VIewasTransparent1.Checked := True
+
+  else
+    VIewasTransparent1.Checked := False;
+
+
+  image1.Transparent := VIewasTransparent1.Checked;
+  image1.Picture.Bitmap.Transparent:=True;
+ //  image1.Picture.Bitmap.HandleType :=  bmDIB;
+ //  image1.Picture.Bitmap.alphaformat := afDefined;
+ // image1.Picture.Bitmap.TransparentColor:= image1.Picture.BitMap.canvas.pixels[0,0];
+ // image1.Picture.Bitmap.TransparentMode:= tmAuto;
+  image1.Repaint;
+
+
+
+
+
+end;
+
+procedure TMainForm.CloseImage1Click(Sender: TObject);
+begin
+ // LoadAlpha1.Enabled := False;
+  //SaveAlphaChannel1.Enabled := False;
+ // optionsform.readoptions;
+  image1.Transparent := False;
+  VIewasTransparent1.Checked := False;
+  image1.Picture.Bitmap.Width := 32;
+  image1.Picture.Bitmap.Height := 32;
+  image1.Picture.Bitmap.Assign(nil);
+  Cell_ImageList.Clear;
+
+
+end;
+
+procedure TMainForm.FormShortCut(var Msg: TWMKey; var Handled: boolean);
+begin
+  if msg.charcode = Ord('T') then
+  begin
+
+    handled := True;
+//    if optionsform.checkbox3.Checked = False then
+//      optionsform.checkbox3.Checked := True
+//
+//
+//    else
+//      optionsform.checkbox3.Checked := False;
+
+  end;
+
+end;
+
+procedure TMainForm.In1Click(Sender: TObject);
+ var
+  AspectRatio:double;
+begin
+  AspectRatio:=panel2.Height/panel2.Width;
+
+  panel2.Width  := panel2.Width + 10;
+  panel2.Height:=round(AspectRatio*panel2.Width);
+
+end;
+
+procedure TMainForm.Out1Click(Sender: TObject);
+ var
+  AspectRatio:double;
+begin
+   AspectRatio:=panel2.Height/panel2.Width;
+
+  if panel2.Width - 10 >= image1.Picture.Bitmap.Width  then
+   begin
+  panel2.Width  := panel2.Width - 10;
+  panel2.Height:=round(AspectRatio*panel2.Width);
+   end;
+end;
+
+procedure TMainForm.Home1Click(Sender: TObject);
+begin
+  panel2.Width  := image1.Picture.Bitmap.Width;
+  panel2.Height := image1.Picture.Bitmap.Height;
+end;
+
+procedure TMainForm.ViewMessages1Click(Sender: TObject);
+begin
+  mess.Show;
+end;
+
+procedure TMainForm.LoadAlpha1Click(Sender: TObject);
+var
+  loadbmp: Tbitmap;
+begin
+  OpenPic.Filter := 'Bitmap (*.bmp)|*.BMP';
+
+  if OpenPic.Execute then
+  begin
+    Screen.Cursor := crHourGlass;
+
+
+
+    if UpperCase(ExtractFileExt(OpenPic.FileName)) = '.BMP' then
+    begin
+
+      loadbmp := Tbitmap.Create;
+
+     // loadbmp.Assign(BMP_Open(OpenPic.FileName));
+
+      Image1.Picture.Bitmap.Assign(LoadAlphamap(Image1.Picture.Bitmap, loadbmp));
+
+    end;
+
+  end;
+  Screen.Cursor := crDefault;
+end;
+
+
+
+
+procedure TMainForm.adpMRUClick(Sender: TObject; const Filename: String);
+begin
+ OpenImage(filename);
+
+end;
+
+
+procedure TMainForm.OpenImage(Filename: String);
+var
+//loadjpg: TJPegImage;
+  loadbmp: Tbitmap;
+  StartTime, EndTime: DWORD;
+ // filename:string;
+begin
+   BMParray:=TBMPARRAY.Create;
+
+ //   SaveAlphaChannel1.Enabled := False;
+  //LoadAlpha1.Enabled := True;
+ // optionsform.readoptions;
+  image1.Transparent := False;
+  VIewasTransparent1.Checked := False;
+
+    Screen.Cursor := crHourGlass;
+
+    if UpperCase(ExtractFileExt(FileName)) = '.MAT' then
+    begin
+      formresetinfo;
+      addcell   := False;
+      starttime := GetTickCount;
+      matopen(FileName);
+      endtime := GetTickCount;
+      StatusBar1.Panels[1].Text :=
+        'mat loaded in ' + IntToStr(EndTime - StartTime) + 'mS';
+    end;
+
+    if UpperCase(ExtractFileExt(FileName)) = '.BMP' then
+    begin
+      AddCell1.Enabled := True;
+      n5.Enabled := True;
+      loadbmp    := Tbitmap.Create;
+      starttime  := GetTickCount;
+
+     // if optionsform.checkbox4.Checked then
+     //            loadbmp.Assign(BMP_Open(FileName))
+
+     // else
+     //  loadbmp.TransparentMode:= tmFixed;
+      loadbmp.LoadFromFile(FileName);
+     //   loadbmp.PixelFormat:= pf32bit;
+     //   loadbmp.TransparentMode:= tmFixed;
+      endtime := GetTickCount;
+      StatusBar1.Panels[1].Text :=
+        'bmp loaded in ' + IntToStr(EndTime - StartTime) + 'mS';
+      //LabelFormat.caption:=GetPixelFormatString(image1.Picture.Bitmap.PixelFormat);
+      formresetinfo;
+      Cell_ImageList.Height := loadbmp.Height;
+      Cell_ImageList.Width  := loadbmp.Width;
+      Cell_ImageList.Insert(0, loadbmp, nil);
+      label3.Caption := IntToStr(Cell_ImageList.Count);
+      BMParray.AddCellFromBMP(loadbmp);
+       defCmppal := BMParray.GetCMP;
+     // loadcmp(BMParray.GetCMP);
+      gridPalette.Repaint;
+      //memleak fix
+      // if Assigned(image1.Picture.Bitmap) then image1.Picture.Bitmap.Free;
+
+      //if optionsform.checkbox2.Checked = True then
+     // image1.Picture.Bitmap.Assign(loadbmp);
+//        image1.Picture.Bitmap.Assign(checkBMPsize(loadbmp));
+
+    //  if optionsform.checkbox2.Checked = False then
+        image1.Picture.Bitmap.Assign(BMParray.GetCell(0));
+      LabelWidth.Caption := IntToStr(image1.Picture.Bitmap.Width);
+      LabelHeight.Caption := IntToStr(image1.Picture.Bitmap.Height);
+      if loadbmp.PixelFormat = pf8bit then
+      LabelFormat.Caption :='8';
+     // image1.Picture.Bitmap.PixelFormat := pf32bit;
+     // image1.Picture.Bitmap.TransparentMode:= tmFixed;
+     // image1.Picture.Bitmap.Alphaformat := afDefined;
+     // image1.Transparent:=true;
+    // Cell_ImageList.GetBitmap(Cell_TrackBar.Position, loadbmp);
+      if loadbmp.PixelFormat = pf8bit then
+      LabelFormat.Caption :='8';
+      loadbmp.Free;
+    end;
+
+  
+
+    MainForm.Caption := 'Mat16 - ' + extractfilename(FileName);
+     adpMRU.AddItem(OpenPic.FileName);
+    Screen.Cursor := crDefault;
+ 
+   //    mainform.Height   := 365;
+//showmessage(fileName);
+end;
+
+
+ end.

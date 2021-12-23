@@ -1,0 +1,186 @@
+ unit options;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
+  StdCtrls, ExtCtrls, Registry, ComCtrls;
+
+type
+  TOptionsForm = class(TForm)
+    OKBUT: TButton;
+    procedure FormCreate(Sender: TObject);
+    function SetOptions: boolean;
+    procedure FormShow(Sender: TObject);
+    procedure OKBUTClick(Sender: TObject);
+    procedure readoptions;
+    procedure CheckBox3Click(Sender: TObject);
+    procedure TrackBar1Change(Sender: TObject);
+    procedure CheckBox1Click(Sender: TObject);
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+const
+  RegBase = '\Software\Jedi Dreams\Mat16';
+
+var
+  OptionsForm: TOptionsForm;
+  //RegBase='\Software\Jedi Dreams\Mat16';
+  NoRegEntry: boolean;
+  Reg: TRegistry;
+
+implementation
+
+uses Main;
+
+{$R *.DFM}
+
+
+
+
+function TOptionsForm.SetOptions: boolean;
+var
+  //Filename:  STRING;
+
+  reg: TRegistry;
+begin
+  Result := False;
+
+  if ShowModal <> mrOk then exit;
+
+
+  Reg := TRegistry.Create;
+  Reg.OpenKey(RegBase, True);
+//  if CheckBox2.Checked = True then
+//    reg.WriteString('BMP_RESIZE', '1');
+//
+//  if CheckBox2.Checked = False then
+//    reg.WriteString('BMP_RESIZE', '0');
+//
+//  if CheckBox1.Checked = True then
+//    reg.WriteString('AUTO_MIPS', '1');
+//
+//  if CheckBox1.Checked = False then
+//    reg.WriteString('AUTO_MIPS', '0');
+//
+//  if CheckBox3.Checked = True then
+//    reg.WriteString('TRANS', '1');
+//
+//  if CheckBox3.Checked = False then
+//    reg.WriteString('TRANS', '0');
+
+
+  Reg.Free;
+  Result := True;
+end;
+
+
+
+
+
+procedure TOptionsForm.FormCreate(Sender: TObject);
+begin
+  {FileListBox1.Directory := JKPath;}
+  //readoptions;
+  if NoRegEntry then
+  begin
+    if SetOptions then exit;
+  end;
+    readoptions;
+
+//  if optionsform.checkbox3.Checked then
+//   mainform.StatusBar1.panels[2].text:='Trans. ON';
+//
+//
+//  if not optionsform.checkbox3.Checked then
+//     mainform.StatusBar1.panels[2].text:='Trans. OFF';
+
+
+end;
+
+
+procedure TOptionsForm.readoptions;
+var
+  reg: TRegistry;
+begin
+  Reg := TRegistry.Create;
+  Reg.OpenKey(RegBase, True);
+
+//  if Reg.ReadString('BMP_RESIZE') = '1' then
+//    checkbox2.Checked := True;
+//
+//  if Reg.ReadString('BMP_RESIZE') = '0' then
+//    checkbox2.Checked := False;
+//
+//  if Reg.ReadString('AUTO_MIPS') = '1' then
+//    checkbox1.Checked := True;
+//
+//  if Reg.ReadString('AUTO_MIPS') = '0' then
+//    checkbox1.Checked := False;
+
+  //if Reg.ReadString('TRANS') = '1' then
+  //  checkbox3.Checked := True;
+
+  //if Reg.ReadString('TRANS') = '0' then
+  //  checkbox3.Checked := False;
+
+  Reg.Free;
+
+
+
+end;
+
+
+procedure TOptionsForm.FormShow(Sender: TObject);
+begin
+  readoptions;
+//  Label2.Caption := IntToStr(Trackbar1.position-1);
+//  if optionsform.checkbox1.Checked then
+//    Trackbar1.Enabled := True;
+//
+//  if not optionsform.checkbox1.Checked then
+//    Trackbar1.Enabled := False;
+end;
+
+
+procedure TOptionsForm.OKBUTClick(Sender: TObject);
+begin
+  ModalResult := mrOk;
+  hide;
+end;
+
+
+
+procedure TOptionsForm.CheckBox3Click(Sender: TObject);
+begin
+//  if optionsform.checkbox3.Checked then
+//   mainform.StatusBar1.panels[2].text:='Trans. ON';
+//    //mainform.Image1.Picture.Bitmap.PixelFormat := pf15bit;
+//
+//  if not optionsform.checkbox3.Checked then
+//    //mainform.Image1.Picture.Bitmap.PixelFormat := pf24bit;
+//     mainform.StatusBar1.panels[2].text:='Trans. OFF';
+
+
+  mainform.Image1.Repaint;
+
+end;
+
+procedure TOptionsForm.TrackBar1Change(Sender: TObject);
+begin
+//  Label2.Caption := IntToStr(Trackbar1.position-1);
+end;
+
+procedure TOptionsForm.CheckBox1Click(Sender: TObject);
+begin
+//  if optionsform.checkbox1.Checked then
+//    Trackbar1.Enabled := True;
+//
+//  if not optionsform.checkbox1.Checked then
+//    Trackbar1.Enabled := False;
+end;
+
+end.
