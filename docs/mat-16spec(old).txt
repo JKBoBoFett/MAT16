@@ -1,0 +1,87 @@
+
+BoBo Fetts 16-bit mat specs.
+Dec 4,2004
+
+Known 16-bit mat formats supported by JediKnight: 
+565 RGB 
+1555 ARGB 
+
+Note: The following code is in Delphi  format
+
+The header for a 16-bit mat is:
+
+TMatHeader = record
+tag:array[0..3] of char; {'MAT ' - notice space after MAT}
+ver:Longint;             {Apparently - version = 0x32 ('2')}
+mat_Type:Longint;        {0 = colors(TColorHeader) , 1= ?, 2= texture(TTextureHeader)}
+NumOfTextures:Longint;   {number of textures or colors}
+NumOfTextures1: Longint; { In color MATs, it's 0, in TX ones, it's equal to numOfTextures }
+unk0:Longint;            { = 1 } {unknown use}
+bits:LongInt;            { = 16} {bits/pixel}
+redbits:longint;        { = 5 } {blue bits per pixel}   {ignored by game engine}
+greenbits:longint;       { = 6 or 5 } {green bits per pixel} {ignored by game engine}
+bluebits:longint;         { = 5 } {red bits per pixel} {ignored by game engine}
+shiftR:longint;          { = 11 or 8} {shift left red} {ignored by game engine}
+shiftG:longint;          { = 5 or 4} {shift left green} {ignored by game engine}
+shiftB:longint;          { = 0 } {shift left blue} {ignored by game engine}
+RedBitDif: longint;  //=3   {ignored by game engine}
+GreenBitDif: longint;  //=2  {ignored by game engine}
+BlueBitDif: longint;  //=3   {ignored by game engine}
+
+unk4h:longint;  //=0 {ignored by game engine}
+unk5h:longint;  //=0 {ignored by game engine}
+unk6h:longint;  //=0 {ignored by game engine}
+
+end;
+
+
+Texture Type Header:
+The texture Type Header is repeated number of Texture times
+
+ TTextureHeader = record
+    textype: longint;         {0 = color, 8= texture}
+    colornum: longint; {With 8-bit images, is an index into the palette. .}
+    pads: array[0..2] of longint;
+    unk1tha: word; //= 16256  {ignored by game engine}
+    unk1thb: word;
+    unk2th: longint; //=0
+    unk3th: longint; //=4  {ignored by game engine}
+    unk4th: longint; //=4  {ignored by game engine}
+    TexNum: longint; //=0 for first texture. Inc. for every texture in mat
+  end;
+
+
+Texture Data header:
+Each Texture in the Mat file has this header before it
+
+ TTextureData = record
+    SizeX: longint;             {horizontal size of first MipMap, must be divisable by 2}
+    SizeY: longint;             {Vertical size of first MipMap ,must be divisable by 2}
+    Transparent: longint;  {1: transparent on, else 0: transparent off}
+    Pad: array[0..1] of longint;{padding = 0 }
+    {padding = 0 }
+    NumMipMaps: longint;        {Number of mipmaps in texture largest one first.}
+  end;
+
+
+
+This is the function in Mat16 that reads the mat data and converts it
+to a bitmap:
+
+
+Function Mat16ToBmp(w,h:Integer):TBitmap;
+var
+      i,j:Integer;
+   
+begin
+
+result := TBitmap.Create;
+
+    result.Width  := W;
+    result.Height := H;
+    result.PixelFormat := pf16bit;
+      
+     FOR i := 0 TO H-1 DO
+        BlockRead(f,result.Scanline[i]^,w*2);
+
+end;

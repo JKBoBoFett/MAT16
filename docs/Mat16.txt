@@ -1,0 +1,102 @@
+Mat16         Ver1.4
+by:BoBo Fett bermshot@hotmail.com
+
+Overview:
+
+Mat16 converts the following formats:
+
+Bitmap to 16-bit Mat
+8-Bit Mat to 16-Bit Mat
+Mat to Bitmap
+CMP to .ACT or .PAL
+
+History:
+
+Ver 1.4
+Converted to Delphi 10.4
+-Added light table support in cmp's. You can now view cmp's and 8bit mats through the 64 levels
+-Cleaned up the UI and allot of the code
+-Fixed Displayed Image X,Y Coordinates
+-Can now display and add custom mipmaps
+added suport for saving to:
+8-bit
+
+Ver 1.3 Mar 8, 2016
+Converted to Delphi Xe2
+
+Ver 1.2 Aug 26, 2007
+ Converted to Delphi 2007
+
+Ver 1.1 Dec 4, 2004
+    -new:Added a 16-bit dither option
+    -new:Bitmap Loader
+    -new:zoom and load alpha tools
+    -Cleaned up the UI
+    -bug fix: The batch conversion output window works again
+
+Ver 1.0 Sept 11, 2004
+    -bug fix: fixed a bit-shifting issue when converting to the 565 mat format.
+  
+Ver .9 Feb 2, 2003
+   -bug fix: Optimized the bitmap resize(resample) and auto mip-map code
+   -bug fix: Provided a work around for loading Bitmaps saved with photoshop 7
+   -new: can now open .jpg files
+   -new: added support for Multi-Celled mats with mip-maps
+   -new: now checks image sizes when creating Multi-Celled mats
+   -new: added a close image function
+
+Ver .8 Aug 30 ,2002
+  -new: Moved project from Delphi4 to Delphi6
+  -bug fix: fixed a large memmory leak that occured durring batch conversion
+
+Ver .7 Apr 2,2002
+   -new: added full support for transparent 16-bit mats(Thanks to Craig Urquhart who discovered the correct format ARGB1555)
+
+Ver .6 Dec 14,2001
+  -bug fix: can now read 16-bit mats from a .gob container.
+  -bug fix: Multi-Celled Texture's didn't save correctly.
+  -new: added a function to view your texture tiled.
+  -new: full support for reading mats from MotS .goo containers
+  -new: Mat16 will now try to pick the best CMP when viewing/loading/converting 8-bit mats from a container.
+  -new: Can now batch convert mats in a container to BMP's. 
+
+Ver .5b May 6,2001
+  -bug fix: fixed a problem with mip map generation.
+  -bug fix: .mat files extracted from a .gob can now be saved as a 16-bit mat
+  -bug fix: removed Transparent Texture support because it just doesn't work right in JK with 16-bit mats
+  -new: you can now pick how many mip maps are generated
+  -new: added a debug mode option. With this set on it will save each mip map level as a seperate bitmap
+  
+Ver .5 Apr. 21, 2001
+ -new: can now open mats from a gob/goo
+ -new: can save CMP's to .pal(paint shop pro) or .act(photoshop)
+ -new: you can now load jediknight cmp's from a simple pull down menu.
+ -new: added scroll bars for viewing images larger then 256*256
+
+Ver .4 - Nov. 25, 2000
+ -new: added an image preview in the open file dialog
+ -new: Reworked the 16-bit mat save/load code it's now 90% faster
+
+Ver .3 - Oct. 14, 2000
+ -new: Image Size Checking and auto-resize to nearest power of 2 
+ -new: auto-generates Mip Maps
+ -new: Multi-Texture support
+ -new: Transparent Textures
+ -new: CMP loading for 8-bit mats
+ -new: added clipboard functions(copy,paste)
+ -bug fix: changed 8-bit mat->bmp code
+
+Ver .2 - Oct. 2, 2000
+ -new: added Batch Conversion from BMP->MAT
+ -bug fix: program now saves bitmaps in 24-bit format so you can open them in photoshop 5.5
+ -bug fix: changed how the save as... dialog works 
+
+Ver .1 - Sep. 30, 2000
+ -first release
+
+You may distribute Mat16 under these rules:
+1)The zip file must contain the original unmodified files.
+2)Must be distributed for free.
+3)If you distribute this file on a web site, CD-ROM or other media you must send notice to the author.
+
+
