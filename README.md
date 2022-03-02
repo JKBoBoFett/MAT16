@@ -6,4 +6,4 @@ BMP to 16-bit and 8-bit MAT
 MAT to BMP                                                  
 CMP to ACT,PAL,GPL 
 
-New version 1.4 is being worked on and will be avaialble here when completed.
+New version 1.4 is being worked on and will be available here when completed.
