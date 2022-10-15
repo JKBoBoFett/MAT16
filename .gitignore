@@ -1,0 +1,21 @@
+/*.identcache
+/*.dcu
+/*.exe
+/*.7z
+/*.bmp
+/docs
+/Pages
+/Test BMP's
+/test out
+/__history
+/__recovery
+/FastMM4
+/libFastMM_FullDebugMode.dylib
+/FastMM_FullDebugMode.dll
+/FastMM_FullDebugMode64.dll
+/*.otares
+/*.rsm
+/*.vlb
+/Mat16_MemoryManager_EventLog.txt
+/*.zip
+/mat_read.pas
