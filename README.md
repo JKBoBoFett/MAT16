@@ -1,8 +1,8 @@
 # MAT16
-MAT16 is the classic texture converter for the Sith Game engine                       
-Mat16 converts the following formats:                         
-
+MAT16 is the classic texture converter for the Sith Game engine
 ![image](https://user-images.githubusercontent.com/93382571/209023283-abca2cc0-e428-4979-b0b1-ef80c8533701.png)
+
+Mat16 converts the following formats:                         
 
 BMP to MAT and MAT to BMP                         
     8-bit                          
