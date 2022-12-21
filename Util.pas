@@ -2,7 +2,7 @@ unit Util;
 
 interface
 
-uses Windows, Classes, ComCtrls, StdCtrls, SysUtils,vcl.graphics,vcl.controls;
+uses Windows, Classes, ComCtrls, StdCtrls, SysUtils,vcl.graphics,vcl.controls,Vcl.Dialogs;
 
 function ExtractName(path: string): string;
 function ChangeExt(path: string; const newExt: string): string;
@@ -16,6 +16,7 @@ procedure Blend(First,second:Tbitmap);
 procedure TransBlt(dst,src:Tbitmap; color:longint);
 function IsBMPPowerOfTwo(x,y: integer): boolean;
 function IsBMPmipsOK(Abitmap:tbitmap): boolean;
+procedure PremultiplyAlpha(bmp:Tbitmap);
 implementation
 
 function ExtractName(path: string): string;
@@ -204,11 +205,36 @@ begin
     end;
 
 
+procedure PremultiplyAlpha(bmp:Tbitmap);
+var
+ inrow32: PRGBQuad;
+ j,i:integer;
+begin
+ for j := 0 to bmp.Height - 1 do
+    begin
+      inrow32 := bmp.ScanLine[j];
+      for i := 0 to bmp.Width - 1 do
+      begin
+        with inrow32^ do
+        begin
+            // must pre-multiply the pixel with its alpha channel before drawing
+            rgbRed:=   (rgbRed * rgbReserved) div 255;
+            rgbGreen:= (rgbGreen * rgbReserved) div 255;
+            rgbBlue:=  (rgbBlue * rgbReserved) div 255;
+            inc(inrow32);
+            end;
+       end;
+      end;
+end;
+
+
 function IsBMPmipsOK(Abitmap:tbitmap): boolean;
 begin
   if (Abitmap.Width >= 8) and (Abitmap.Height >=8) and
      (Abitmap.PixelFormat <> pf32bit) then
   result:=true;
+
+
 end;
 
 function IsBMPPowerOfTwo(x,y: integer): boolean;

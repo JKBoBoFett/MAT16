@@ -23,6 +23,7 @@ type
     AddCellButton: TButton;
     FormatComboBox: TComboBox;
     Label4: TLabel;
+    RemoveCellButton: TButton;
     procedure FormShow(Sender: TObject);
     procedure CellsListBoxClick(Sender: TObject);
     procedure MipsListBoxClick(Sender: TObject);
@@ -31,6 +32,8 @@ type
     procedure Update;
     procedure FormatComboBoxClick(Sender: TObject);
     procedure OKButtonClick(Sender: TObject);
+    procedure RemoveCellButtonClick(Sender: TObject);
+    procedure CreateMipMapsFromCell(BMPArray:Tbmparray;CellBMP:Tbitmap);
   private
     { Private declarations }
   public
@@ -65,7 +68,7 @@ resize := Tbitmap.Create;
        if UpperCase(ExtractFileExt(Openpic.FileName)) = '.BMP' then
     begin
 
-      loadbmp.HandleType := bmDIB;
+      //loadbmp.HandleType := bmDIB;
 
 
 
@@ -76,11 +79,11 @@ resize := Tbitmap.Create;
 
 
     // 8 bit non transparent
-    if (FormatComboBox.ItemIndex = 0) then
+    if (FormatComboBox.ItemIndex < 2) then
      begin
        if fmt <> pf8bit then
         begin
-        showmessage('bitmap is not 8-bit');
+        showmessage('bitmap is '+BMPFMTtoStr(inputBMPFormat)+' not 8-bit');
         exit;
         end
 
@@ -88,7 +91,14 @@ resize := Tbitmap.Create;
         begin
         editA.AddCellFromBMP(loadbmp);
         editA.ConvertBMPPal;
-        editA.fmt:= '8-bit INDEXED';
+        if (FormatComboBox.ItemIndex = 0) then
+         editA.fmt:= '8-bit INDEXED'
+        else
+          begin
+          editA.fmt:= '8-bit trans INDEXED';
+          MipRadioGroup.Enabled:=false;
+          MipRadioGroup.ItemIndex :=0;
+          end;
         end;
      end;
 
@@ -96,7 +106,7 @@ resize := Tbitmap.Create;
      begin
        if inputBMPFormat <> bf16bit565  then
         begin
-        showmessage('bitmap is not 16-bit RGB565');
+        showmessage('bitmap is '+BMPFMTtoStr(inputBMPFormat)+' not 16-bit RGB565');
         exit;
         end
 
@@ -111,7 +121,7 @@ resize := Tbitmap.Create;
      begin
        if inputBMPFormat <> bf16bitA1555 then
         begin
-        showmessage('bitmap is not 16-bit ARGB1555');
+        showmessage('bitmap is '+BMPFMTtoStr(inputBMPFormat)+' not 16-bit ARGB1555');
         exit;
         end
 
@@ -119,14 +129,17 @@ resize := Tbitmap.Create;
         begin
         editA.AddCellFromBMP(loadbmp);
         editA.fmt:= '16-bit ARGB1555';
+        MipRadioGroup.Enabled:=false;
+        MipRadioGroup.ItemIndex :=0;
         end;
      end;
 
+    {internal format is actually 32-bit here}
     if (FormatComboBox.ItemIndex = 4) then
      begin
-       if (inputBMPFormat <> bf16bitA444)  then
+       if (inputBMPFormat <> bf16bitA444) and (inputBMPFormat <> bf32bit) then
         begin
-        showmessage('bitmap is not 16-bit ARGB4444');
+        showmessage('bitmap is '+BMPFMTtoStr(inputBMPFormat)+' not 32-bit or 16-bit RGBA4444');
         exit;
         end
 
@@ -134,14 +147,68 @@ resize := Tbitmap.Create;
         begin
         editA.AddCellFromBMP(loadbmp);
         editA.fmt:= '16-bit RGBA4444';
+        MipRadioGroup.Enabled:=false;
+        MipRadioGroup.ItemIndex :=0;
         end;
      end;
+
+    if (FormatComboBox.ItemIndex = 5) then
+     begin
+       if (inputBMPFormat <> bf24bit) then
+        begin
+        showmessage('bitmap is '+BMPFMTtoStr(inputBMPFormat)+' not 24-bit');
+        exit;
+        end
+
+      else
+        begin
+        editA.AddCellFromBMP(loadbmp);
+        editA.fmt:= '24-bit RGB';
+        end;
+     end;
+
+    if (FormatComboBox.ItemIndex = 6) then
+     begin
+       if (inputBMPFormat <> bf32bit) then
+        begin
+        showmessage('bitmap is '+BMPFMTtoStr(inputBMPFormat)+' not 32-bit');
+        exit;
+        end
+
+      else
+        begin
+        editA.AddCellFromBMP(loadbmp);
+        editA.fmt:= '32-bit RGBA';
+        MipRadioGroup.Enabled:=false;
+        MipRadioGroup.ItemIndex :=0;
+        end;
+     end;
+
 
       resize.HandleType :=  bmDIB;
       size:=1;
 
      if IsBMPmipsOK(loadbmp) then
        begin
+
+       if (loadbmp.Height > 256) or (loadbmp.Width > 256) then
+          begin
+            with TTaskDialog.Create(self) do
+            try
+              Caption := 'Mat16';
+              Title := 'Create Mip-Maps';
+              Text := 'Do you want to continue even though JK doesnt support Mip-Maps for images >256?';
+              CommonButtons := [tcbYes, tcbNo];
+              DefaultButton := tcbNo;
+              MainIcon := tdiNone;
+              if Execute then
+                if ModalResult = mrNo then
+                  MipRadioGroup.ItemIndex:=0;;
+            finally
+              Free;
+            end;
+          end;
+
         for i := 0 to (MipRadioGroup.ItemIndex - 1) do
           begin
           size:=size / 2;
@@ -160,12 +227,12 @@ resize := Tbitmap.Create;
              begin
              // resample:= Conv24bitTo16(resize,3,2,3);
               resample:= DitherTo16(resize);
-              editA.AddSubMipMapFromBMP( resample);
+              editA.AddSubMipMapFromBMP(resample);
               resample.free;
              end;
 
-
-
+             if fmt = pf24bit then
+               editA.AddSubMipMapFromBMP(resize);
 
           end;
         end;
@@ -217,7 +284,8 @@ CellsListBox.Clear;
 MipsListBox.Clear;
 
 // if assigned(image1.Picture.Bitmap) then image1.Picture.Bitmap.Free;
-//image1.Picture.Bitmap:=nil;
+image1.Picture:=nil;
+
 end;
 
 
@@ -235,10 +303,19 @@ MipsListBox.Clear;
   if editA.GetCellCount = 0 then
    begin
    OKButton.ModalResult:=mrCancel;
+   RemoveCellButton.Enabled:=false;
+   FormatComboBox.Enabled:=true;
+   MipRadioGroup.Enabled:=true;
     if FormatComboBox.ItemIndex = -1 then
-     AddCellButton.Enabled:=false
+     begin
+     AddCellButton.Enabled:=false;
+     //RemoveCellButton.Enabled:=false;
+     end
     else
+     begin
      AddCellButton.Enabled:=true;
+     //RemoveCellButton.Enabled:=true;
+     end;
    end
   else
    begin
@@ -250,6 +327,7 @@ MipsListBox.Clear;
        MipRadioGroup.ItemIndex := editA.GetMipCount;
        MipRadioGroup.Enabled:=false;
        AddCellButton.Enabled:=true;
+       RemoveCellButton.Enabled:=true;
      end;
 
  if editA.GetCellCount >= 16 then
@@ -261,16 +339,38 @@ MipsListBox.Clear;
          FormatComboBox.ItemIndex:=0;
 
        if ContainsText(editA.fmt, '8-bit trans INDEXED') then
+         begin
          FormatComboBox.ItemIndex:=1;
+         MipRadioGroup.Enabled:=false;
+         MipRadioGroup.ItemIndex :=0;
+         end;
 
       if ContainsText(editA.fmt, '16-bit RGB565') then
          FormatComboBox.ItemIndex:=2;
 
      if ContainsText(editA.fmt, '16-bit ARGB1555') then
+        begin
          FormatComboBox.ItemIndex:=3;
+         MipRadioGroup.Enabled:=false;
+         MipRadioGroup.ItemIndex :=0;
+        end;
 
-     if ContainsText(editA.fmt, 'RGBA') then
+     if ContainsText(editA.fmt, 'RGBA4444') then
+         begin
          FormatComboBox.ItemIndex:=4;
+         MipRadioGroup.Enabled:=false;
+         MipRadioGroup.ItemIndex :=0;
+         end;
+
+     if ContainsText(editA.fmt, '24-bit RGB') then
+         FormatComboBox.ItemIndex:=5;
+
+     if ContainsText(editA.fmt, '32-bit RGBA') then
+         begin
+         FormatComboBox.ItemIndex:=6;
+         MipRadioGroup.Enabled:=false;
+         MipRadioGroup.ItemIndex :=0;
+         end;
 
       FormatComboBox.Enabled:=false;
       end;
@@ -323,6 +423,78 @@ var
 h:Hbitmap;
 begin
 
+end;
+
+procedure TEditMatForm.RemoveCellButtonClick(Sender: TObject);
+var
+CellIndexToRemove,i:Integer;
+NewBMPArray:Tbmparray;
+tempBMP:tbitmap;
+begin
+NewBMPArray:=Tbmparray.Create;
+NewBMPArray.fmt:=editA.fmt;
+
+for i := 0 to (CellsListBox.Items.Count - 1) do
+ if CellsListBox.Selected[i] then  CellIndexToRemove:=i;
+
+for i := 0 to (editA.GetCellCount - 1) do
+  begin
+   if i<>CellIndexToRemove then
+     begin
+     tempBMP:=edita.GetCell(i); {function creates bmp}
+     NewBMPArray.AddCellFromBMP( tempBMP );
+
+     if ContainsText(NewBMPArray.fmt,'INDEXED') then
+        NewBMPArray.ConvertBMPPal;
+     CreateMipMapsFromCell( NewBMPArray,tempBMP );
+     tempBMP.Free;
+     tempBMP:=nil;
+     end;
+  end;
+
+edita.Assign(NewBMPArray);
+NewBMPArray.Free;
+update;
+end;
+
+procedure TEditMatForm.CreateMipMapsFromCell(BMPArray:Tbmparray;CellBMP:Tbitmap);
+var
+resize,resample:tbitmap;
+size:double;
+i:Integer;
+fmt:TPixelFormat;
+begin
+  resize := Tbitmap.Create;
+  resize.HandleType :=  bmDIB;
+  size:=1;
+  fmt:= CellBMP.PixelFormat;
+     if IsBMPmipsOK(CellBMP) then
+       begin
+        for i := 0 to (MipRadioGroup.ItemIndex - 1) do
+          begin
+          size:=size / 2;
+          scaleimage(CellBMP,resize,size); //converts bmps to 24bit
+
+           //reduce colors back to 8-bit using original pallette
+           //https://docwiki.embarcadero.com/Libraries/Sydney/en/Vcl.Imaging.GIFImg.TDitherMode
+           if fmt = pf8bit then
+             begin
+              resample:=ReduceColors(resize,rmPalette,dmNearest,8,CellBMP.Palette);  //palette must still exist after conversion
+              BMPArray.AddSubMipMapFromBMP(resample);
+              resample.free;
+             end;
+
+            if fmt = pf16bit then
+             begin
+             // resample:= Conv24bitTo16(resize,3,2,3);
+              resample:= DitherTo16(resize);
+              BMPArray.AddSubMipMapFromBMP( resample);
+              resample.free;
+             end;
+
+          end;
+        end;
+resize.Free;
 end;
 
 end.

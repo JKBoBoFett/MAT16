@@ -1,7 +1,7 @@
 unit BMParrays;
 //because imagelist use will remap pallete
 interface
-uses Windows,Graphics, SysUtils, Classes,MATHeaders,ColorMap,CMPHeaders,util,System.IOUtils,Dialogs,BMP_IO;
+uses Windows,Graphics, SysUtils, Classes,MATHeaders,ColorMap,CMPHeaders,util,System.IOUtils,Dialogs,BMP_IO,System.StrUtils;
 
  Type
 
@@ -21,7 +21,7 @@ uses Windows,Graphics, SysUtils, Classes,MATHeaders,ColorMap,CMPHeaders,util,Sys
 
       procedure setformat(fmt:string);
     public
-
+    name:Ansistring;
     isTransparent:Boolean;
     procedure ConvertBMPPal;
     procedure RemapArrayfromCMP(cmp: TCMP);
@@ -211,6 +211,7 @@ Row: pByteArray;
  inrow32: PRGBQuad;
  row16:PWordArray;
  j,i:integer;
+
  begin
   BMPAlpha:=Tbitmap.create;
   BMPAlpha.Assign(CellBitmaps[index]);
@@ -239,7 +240,6 @@ Row: pByteArray;
    result.Assign(BMPAlpha);
    BMPAlpha.Free;
   end;
-
 
 function TBMPARRAY.GetMip(Cellindex,Mipindex:Integer):Tbitmap;
  begin
@@ -312,7 +312,7 @@ begin
 
 
   CMPData:=default(TCMPPal);
-
+  name:='';
   inherited;
 end;
 
@@ -343,15 +343,17 @@ end;
  Splitted: TArray<String>;
  tempBitmap:Tbitmap;
  begin
- gpath := ExtractFilePath(filename);
- tempBitmap:=Tbitmap.create;
- AssignFile(Txt, filename);
+
+  gpath := ExtractFilePath(filename);
+  AssignFile(Txt, filename);
   Reset(Txt);
 
   while not Eof(Txt) do
   begin
    Readln(Txt, s);
    Splitted := s.Split([':']);
+    if Splitted[0] = 'FILENAME' then
+     self.name:=trim(Splitted[1]);
    if Splitted[0] = 'FORMAT' then
     self.setformat(trim(Splitted[1]));
    if Splitted[0] = 'TRANSPARENT' then
@@ -368,15 +370,19 @@ end;
        Splitted := s.Split(['|']);
        if fileexists(gpath+Splitted[0]) then
          begin
-         tempBitmap.LoadFromFile(gpath+Splitted[0]);
+         //tempBitmap.LoadFromFile(gpath+Splitted[0]);
+         tempBitmap:=(BMP_Open(gpath+Splitted[0])); //function creates bmp
          self.AddCellFromBMP(tempBitmap);
+         //tempBitmap.Free;
          self.ConvertBMPPal;
          for K := 1 to length(Splitted)-1 do
            begin
             if fileexists(gpath+Splitted[K]) then
               begin
-               tempBitmap.LoadFromFile(gpath+Splitted[K]);
+               //tempBitmap.LoadFromFile(gpath+Splitted[K]);
+               tempBitmap:=(BMP_Open(gpath+Splitted[K])); //function creates bmp
                self.AddSubMipMapFromBMP(tempBitmap);
+              // tempBitmap.Free;
               end;
            end;
          end
@@ -385,12 +391,10 @@ end;
       end;
      end;
 
-
   end;
   CloseFile(Txt);
   tempBitmap.Free;
   tempBitmap:=nil;
-  // Splitted := MyString.Split([':']);
  end;
 
  procedure TBMPARRAY.SaveMTS(filename: string);
@@ -398,8 +402,15 @@ end;
  i,j,k: integer;
  OutFile: textfile;
  savebitmap: Tbitmap;
- mname,gpath,mpath: string;
+ mname,gpath,mpath: Ansistring;
  begin
+ {filename needs to be the mat filename}
+  if (UpperCase(ExtractFileExt(filename)) <> '.MAT') then
+  begin
+   raise Exception.Create('Save MTS wrong file type');
+  end;
+
+
   AssignFile(OutFile, ChangeFileExt(filename, '.mat16s'));
   Rewrite(OutFile);
 
@@ -416,7 +427,9 @@ end;
 
    for J := 0 to self.GetCellCount - 1 do
       begin
+      //savebitmap:=Tbitmap.Create;
       savebitmap:=(self.GetCell(J));
+      //savebitmap.Assign(self.GetCell(J));
       mname      := ExtractName(filename);
       mname      := TPath.GetFileNameWithoutExtension(mname);
       mname      := mname+'_Cell'+inttostr(j);
@@ -425,11 +438,15 @@ end;
 
       Write(OutFile,mname);
 
-//      if saveBitmap.PixelFormat = pf32bit then
-//         SaveTransparentBitmap(saveBitmap, mpath) //work around for saving Tbitmap with alpha
-//
-//      else
-//        saveBitmap.SaveToFile(mpath);
+       if (UpperCase(ExtractFileExt(mpath)) <> '.BMP') then
+        begin
+         raise Exception.Create('Save MTS Cell wrong file type');
+        end;
+
+         if not ContainsText(mpath,'_Cell') then
+          begin
+           raise Exception.Create('Save MTS Cell wrong file type');
+          end;
 
       BMP_Save(saveBitmap, mpath);
 
@@ -441,6 +458,7 @@ end;
         begin
           //savebitmap := Tbitmap.Create;
           savebitmap:=(self.GetMip(J,K));
+          //savebitmap.Assign(self.GetCell(J));
           mname      := ExtractName(filename);
           mname      := TPath.GetFileNameWithoutExtension(mname);
           mname      := mname+'_Cell'+inttostr(j)+'_Mip'+inttostr(K);
@@ -453,7 +471,17 @@ end;
 //             SaveTransparentBitmap(saveBitmap, mpath) //work around for saving Tbitmap with alpha
 //
 //          else
-//           saveBitmap.SaveToFile(mpath);
+//         saveBitmap.SaveToFile(mpath);
+        if  (UpperCase(ExtractFileExt(mpath)) <> '.BMP') then
+                begin
+                 raise Exception.Create('Save MTS MIP wrong file type');
+                end;
+
+         if not ContainsText(mpath,'_Mip') then
+          begin
+           raise Exception.Create('Save MTS Cell wrong file type');
+          end;
+
           BMP_Save(saveBitmap, mpath);
 
           saveBitmap.Free;

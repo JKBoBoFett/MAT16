@@ -2,7 +2,7 @@ unit gobgoo;
 
 interface
 
-uses  Classes, SysUtils,Vcl.Dialogs,CMPHeaders;
+uses  Classes, SysUtils,Vcl.Dialogs,CMPHeaders,colormap,GloabalVars,MATImage,BMParrays,util,System.StrUtils;
 
 type
 
@@ -48,6 +48,9 @@ function gobFilesToArray(gobfilename: string; filetype:string):TFileOffsets;
 function bafFilesToArray(gobfilename: string; filetype:string):TFileOffsets;
 function bafFilesToList(gobfilename: string; filetype:string):TstringList;
 function gobFileArrayToList(FileOffsets: TFileOffsets):TstringList;
+function GobMatSavetoBMP(gobfile: string; fileinGobName: string;FileOffsets: TFileOffsets;CMPOffsets: TFileOffsets;MatInGob:boolean):String;
+function GobMatToArray(gobfile: string; fileinGobName: string;
+           FileOffsets: TFileOffsets;CMPOffsets: TFileOffsets):TBMPArray;
  //procedure gobview.ListBox1Click(Sender: TObject);
  //TGOB2Directory=class(TContainerFile)
  //gh:TGob2Header;
@@ -139,6 +142,103 @@ end;
 
 
 {GOB2}
+function GobMatToArray(gobfile: string; fileinGobName: string;
+           FileOffsets: TFileOffsets;CMPOffsets: TFileOffsets):TBMPArray;
+var
+bestcmp:string;
+pos: integer;
+gobCMP:TCMP;
+Mat: TMAT;
+begin
+ gobCMP:=TCMP.create;
+  {load jk or mots cmp}
+   if (UpperCase(ExtractFileExt(gobfile)) = '.GOB') or
+     (UpperCase(ExtractFileExt(gobfile)) = '.GOO') or
+     (UpperCase(ExtractFileExt(gobfile)) = '') then
+     begin
+     bestcmp    := GetbestCMP(fileinGobName, JKPath);
+     pos:=GetGOBArrayOffset(CMPOffsets, bestcmp);
+     gobCMP.LoadCMPFromFile(jkpath, pos);
+     end;
+    {phantom menace cmp}
+   if (UpperCase(ExtractFileExt(gobfile)) = '.BAF') then
+     begin
+     gobCMP.LoadCMPFromBAFFile(gobfile, 336);
+     end;
+
+    Mat:=TMAT.Create(TFormat.BMP);
+    Mat.SetCMP(gobCMP.GetRGB);
+
+     pos:=GetGOBArrayOffset(FileOffsets, fileinGobName);
+     Result:= Mat.LoadFromFile(gobfile, pos);
+
+ Mat.Free;
+ gobCMP.Free;
+ Mat:=nil;
+
+end;
+
+
+function GobMatSavetoBMP(gobfile: string; fileinGobName: string;FileOffsets: TFileOffsets;CMPOffsets: TFileOffsets;MatInGob:boolean):String;
+var
+bestcmp:string;
+pos: integer;
+gobCMP:TCMP;
+Mat: TMAT;
+tempA:TBMPArray;
+gpath, mpath: string;
+begin
+  gobCMP:=TCMP.create;
+  {load jk or mots cmp}
+   if (UpperCase(ExtractFileExt(gobfile)) = '.GOB') or
+     (UpperCase(ExtractFileExt(gobfile)) = '.GOO') or
+     (UpperCase(ExtractFileExt(gobfile)) = '') then
+     begin
+     bestcmp    := GetbestCMP(fileinGobName, JKPath);
+     pos:=GetGOBArrayOffset(CMPOffsets, bestcmp);
+     gobCMP.LoadCMPFromFile(jkpath, pos);
+     end;
+    {phantom menace cmp}
+   if (UpperCase(ExtractFileExt(gobfile)) = '.BAF') then
+     begin
+     gobCMP.LoadCMPFromBAFFile(gobfile, 336);
+     end;
+
+    Mat:=TMAT.Create(TFormat.BMP);
+    Mat.SetCMP(gobCMP.GetRGB);
+
+    if MatInGob then
+     begin
+     pos:=GetGOBArrayOffset(FileOffsets, fileinGobName);
+     tempA:= Mat.LoadFromFile(gobfile, pos);
+     gpath := ExtractFilePath(gobfile);
+     mpath := gpath + ExtractName(fileinGobName);
+     end
+    else
+     begin
+     tempA:= Mat.LoadFromFile(fileinGobName);
+     mpath := fileinGobName;
+     end;
+
+    {8.3 filename bug workaround}
+    if ContainsText(mpath,'~1') then
+        mpath:= StringReplace(mpath, '~1', '_1', [rfReplaceAll, rfIgnoreCase]);
+
+    tempA.SaveMTS(mpath);
+
+    Result:='Saved MTS and bmp(s): '
+      + ExtractName(fileinGobName)
+      + ' cmp: ' + bestcmp;
+
+    Mat.Free;
+    tempA.Free;
+    gobCMP.Free;
+    Mat:=nil;
+    tempA:=nil
+
+ end;
+
+
 procedure opengob(filename: string);
 var //Fi:TFInfo;
   i:   integer;

@@ -4,7 +4,7 @@ interface
 
 uses
   SysUtils, Windows, Messages, Classes, Graphics, Controls,
-  Forms, Dialogs, StdCtrls, ImgList, Menus, Grids, ComCtrls, ExtCtrls,
+  Forms, vcl.Dialogs, StdCtrls, ImgList, Menus, Grids, ComCtrls, ExtCtrls,
   Buttons, ToolWin, ExtDlgs, Util, clipbrd, ShellAPI,
    gobgoo, Registry, SaveDLGUnit, adpMRU,
   System.ImageList,MATImage,BMParrays,ColorMap,MATHeaders,CMPHeaders, System.IOUtils,StrUtils,Set8bitFormatOnOpen,BMP_IO;
@@ -62,8 +62,6 @@ type
     GroupBox1: TGroupBox;
     ViewasTransparent1: TMenuItem;
     ViewTiled2: TMenuItem;
-    CloseImage1: TMenuItem;
-    N3:      TMenuItem;
     Panel2:  TPanel;
     Zoom1:   TMenuItem;
     In1:     TMenuItem;
@@ -141,6 +139,7 @@ type
     procedure updateCMPcomboBox(container:string);
     procedure TrackBarChange;
     procedure Createnewmatfrombmps1Click(Sender: TObject);
+    procedure EditMTS1Click(Sender: TObject);
   end;
 
 var
@@ -150,7 +149,6 @@ var
   numframes: integer;
   savefname: string;
   addcell:   boolean;
-  jkpath:    string;
   motspath:  string;
   isbatch:   boolean;
    adpMRU: TadpMRU;
@@ -160,7 +158,7 @@ var
 implementation
 
 uses about_unit, Batch,
-   gobform, ViewtileUnit, mess_frm,options, EditMat;
+   gobform, ViewtileUnit, mess_frm,options, EditMat,EditMTS,GloabalVars;
 
 {$R *.DFM}
 
@@ -208,11 +206,20 @@ begin
   BMPArray.Assign(BMPA);
     tempBMP:=(BMPArray.GetCell(0));
 
-    if (Mat.GetMatFormat=(TFormat.RGBA4444)) or (Mat.GetMatFormat=(TFormat.RGBA5551))  then
+    if (Mat.GetMatFormat=(TFormat.RGBA4444)) or (Mat.GetMatFormat=(TFormat.RGBA5551)) or (Mat.GetMatFormat=(TFormat.RGBA8888)) then
     begin
-    tempBMP:=(BMPArray.GetAlphaCellForDisplay(0));
+    PremultiplyAlpha(tempBMP);
     Draw32bitImageOnGrid(tempBMP);
     end;
+
+  if Mat.GetMatFormat=(TFormat.RGB888) then
+     begin
+     Image1.Picture.Bitmap.Assign(tempBMP);
+     if tempBMP.PixelFormat =pf8bit then
+    begin
+      Image1.Picture:=nil;
+    end;
+     end;
 
   if Mat.GetMatFormat=(TFormat.ARGB1555) then
     begin
@@ -310,9 +317,15 @@ begin
    tmpBMP:=(BMPArray.GetBMP(Cell_TrackBar.Position,Mip_TrackBar.Position));
 
    if (tmpBMP.PixelFormat = pf32bit)  then
-       Draw32bitImageOnGrid(tmpBMP);
+       begin
+        PremultiplyAlpha(tmpBMP);
+        Draw32bitImageOnGrid(tmpBMP);
+       end;
 
    if (tmpBMP.PixelFormat = pf16bit)  then
+       image1.picture.Bitmap.Assign(tmpBMP);
+
+  if (tmpBMP.PixelFormat = pf24bit)  then
        image1.picture.Bitmap.Assign(tmpBMP);
 
    if (bitmap.PixelFormat = pfCustom)  then //ARGB1555
@@ -350,6 +363,7 @@ end;
 procedure TMainForm.FileSaveAs(Sender: TObject);
  var
 Mat: TMAT;
+MatName:string;
 begin
   Screen.Cursor := crHourGlass;
   SaveDialog.FileName := ChangeExt(OpenDialog.FileName, '');
@@ -370,7 +384,8 @@ begin
 
     if UpperCase(ExtractFileExt(SaveDialog.FileName)) = '.MAT16S' then
     begin
-      BMPArray.SaveMTS(SaveDialog.FileName);
+      MatName:=ChangeFileExt(SaveDialog.FileName, '.mat');
+      BMPArray.SaveMTS(MatName);
     end;
 
   end;
@@ -608,49 +623,19 @@ begin
 end;
 
 procedure TMainForm.BatchConvertBMPs1Click(Sender: TObject);
-//var
-//  I, Count:    integer;
-//  BatchBitmap: TBitmap;
-//  savename, mcfname: string;
-//  StartTime, EndTime: DWORD;
+var
+  I:    integer;
+  LoadBMParray:TBMParray;
+  LoadMat: TMAT;
+  gpath, mpath: string;
+
 begin
-  // isbatch:=TRUE;
+ OpenDialogBatch.Filter     :=
+    'mat16 script with bitmaps|*mat16s';
+Screen.Cursor := crHourGlass;
 
-  MATSaveDlg.Show;
-  isbatch := True;
-
-end;
-
-
-procedure TMainForm.BatchConvertMATBMP1Click(Sender: TObject);
-
- var
-  i,j,k: integer;
-  savebitmap: Tbitmap;
-  bestcmp, gpath, mpath, fext, mname: string;
-//  f: file;
-  Mat: TMAT;
- //  matFormatHeader:TMatHeader;
-   pos:longint;
-   tempA:TBMPArray;
-   MatInfoList:Tstringlist;
-begin
-
-OpenDialogBatch.Filter     :=
-    'mat texture (*.mat)|*.MAT';
- // savebitmap := Tbitmap.Create;
-  gpath := ExtractFilePath(label1.Caption);
-  fext  := ExtractName(label1.Caption);
-  fext  := ChangeFileExt(fext, '');
-  gpath := gpath + fext;
-  Screen.Cursor := crHourGlass;
-  CreateDir(gpath);
-  //BatchForm.Show;
-
-  i:=0;
   if OpenDialogBatch.Execute then
   begin
-    gpath := ExtractFilePath(OpenDialogBatch.Files[I]);
     Screen.Cursor := crHourGlass;
 
     BatchForm.ProgressBar1.Position := 0;
@@ -660,42 +645,77 @@ OpenDialogBatch.Filter     :=
     BatchForm.Memo1.Lines.Add(IntToStr(OpenDialogBatch.Files.Count) +
       ' File(s) selected to convert');
 
-
     BatchForm.ProgressBar1.Max := OpenDialogBatch.Files.Count-1;
-   // starttime := GetTickCount;
+
     for I := 0 to OpenDialogBatch.Files.Count - 1 do
-    begin
-    BatchForm.ProgressBar1.Position := i;
+     begin
+      BatchForm.ProgressBar1.Position := i;
 
-    bestcmp    := GetbestCMP(OpenDialogBatch.Files[I], jkpath);
-
-    pos:=GetGOBFileOffset(jkpath,bestcmp);
-    MainCMP.LoadCMPFromFile(jkpath, pos);
-
-   // mainform.gridPalette.Repaint;
-
-    Mat:=TMAT.Create(TFormat.BMP);
-    Mat.SetCMP(defCmppal);
-    tempA:= Mat.LoadFromFile(OpenDialogBatch.Files[I]);
-
-     mess.Memo1.lines.Add(OpenDialogBatch.Files[I]);
-     MatInfoList:=Mat.HeadersToJSON;
-     mess.Memo1.lines.AddStrings(MatInfoList);
-
-     tempA.SaveMTS(OpenDialogBatch.Files[I]);
-     BatchForm.Memo1.Lines.Add('Saved: '
-      + TPath.GetFileNameWithoutExtension(OpenDialogBatch.Files[I])
-      + ' cmp: ' + bestcmp);
-
-
-    Mat.Free;
-    tempA.Free;
-    MatInfoList.Free;
-  end;
+      if UpperCase(ExtractFileExt(OpenDialogBatch.Files[I])) = '.MAT16S' then
+        begin
+        LoadBMParray:=TBMPARRAY.Create;
+         try
+          LoadBMParray.OpenMTS(OpenDialogBatch.Files[I]);
+          LoadMat:=TMAT.CreateFromBMPArray(LoadBMParray);
+          mpath:=ExtractFilePath(OpenDialogBatch.Files[I])+LoadBMParray.name;
+          if  (UpperCase(ExtractFileExt(mpath)) <> '.MAT') then
+                begin
+                 raise Exception.Create('Save MAT wrong file type '+mpath);
+                end;
+          LoadMat.SaveMat(ExtractFilePath(OpenDialogBatch.Files[I])+LoadBMParray.name);
+         except
+          On e:exception do
+           begin
+            ShowMessage(E.ClassName+' error raised, with message : '+E.Message);
+            LoadBMParray.Free;
+            LoadMat.Free;
+            Screen.Cursor := crDefault;
+            exit;
+           end;
+         end;
+        BatchForm.Memo1.Lines.Add('Saved MAT: '+ExtractFilePath(OpenDialogBatch.Files[I])+LoadBMParray.name );
+        LoadBMParray.Free;
+        LoadMat.Free;
+        end;
+     end;
   end;
   BatchForm.Memo1.Lines.Add('-Done-');
   Screen.Cursor := crDefault;
+end;
 
+procedure TMainForm.BatchConvertMATBMP1Click(Sender: TObject);
+var
+  i,j,k: integer;
+  Mat: TMAT;
+  pos:longint;
+  tempA:TBMPArray;
+begin
+
+OpenDialogBatch.Filter     :=
+    'mat texture (*.mat)|*.MAT';
+Screen.Cursor := crHourGlass;
+
+  if OpenDialogBatch.Execute then
+  begin
+    Screen.Cursor := crHourGlass;
+
+    BatchForm.ProgressBar1.Position := 0;
+    BatchForm.Show;
+
+    BatchForm.Memo1.Lines.Clear;
+    BatchForm.Memo1.Lines.Add(IntToStr(OpenDialogBatch.Files.Count) +
+      ' File(s) selected to convert');
+
+    BatchForm.ProgressBar1.Max := OpenDialogBatch.Files.Count-1;
+
+    for I := 0 to OpenDialogBatch.Files.Count - 1 do
+     begin
+      BatchForm.ProgressBar1.Position := i;
+      BatchForm.Memo1.Lines.Add(GobMatSavetoBMP('', OpenDialogBatch.Files[I],FileOffsets,CMPOffsets,false));
+     end;
+  end;
+  BatchForm.Memo1.Lines.Add('-Done-');
+  Screen.Cursor := crDefault;
 end;
 
 procedure TMainForm.Button1Click(Sender: TObject);
@@ -814,6 +834,12 @@ begin
 end;
 
 
+procedure TMainForm.EditMTS1Click(Sender: TObject);
+begin
+  EditMTSForm.Show;
+
+end;
+
 procedure TMainForm.Draw16bitImageOnGrid(bmp:Tbitmap);
 var
 gridBMP,remap:tbitmap;
@@ -839,6 +865,7 @@ procedure TMainForm.Draw32bitImageOnGrid(bmp:Tbitmap);
 gridBMP,remap:tbitmap;
 begin
  gridBMP:=Tbitmap.create;
+ gridBMP.PixelFormat:=pf32bit;
  try
  RenderGrid(gridBMP,bmp.Height,bmp.Width,1,clGray,clLtGray);
  Blend(gridBMP,bmp);
@@ -1353,7 +1380,19 @@ begin
     begin
 
       LoadBMParray:=TBMPARRAY.Create;
+      try
       LoadBMParray.OpenMTS(FileName);
+
+      except
+       On e:exception do
+       begin
+         ShowMessage(E.ClassName+' error raised, with message : '+E.Message);
+         LoadBMParray.Free;
+         Screen.Cursor := crDefault;
+         exit;
+       end;
+
+     end;
 
       Cell_TrackBar.Position := 0;
       image1.Repaint;
@@ -1362,9 +1401,7 @@ begin
       LoadMat.matFormat:=LoadMat.StrToFormat(LoadBMParray.fmt);
 
       BMPArrayDisplay(LoadBMParray,LoadMat);  //frees bmpA and Tmat
-
-
-     end;
+    end;
 
     MainForm.Caption := 'Mat16 - ' + extractfilename(FileName);
     adpMRU.AddItem(OpenPic.FileName);

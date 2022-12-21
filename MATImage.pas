@@ -1,10 +1,10 @@
 unit MATImage;
 
 interface
-uses Windows,Graphics, SysUtils, Classes, MATHeaders, Color16,ColorMap,BMParrays,CMPHeaders,BMP_IO;
+uses Windows,Graphics, SysUtils, Classes, MATHeaders, Color16,ColorMap,BMParrays,CMPHeaders,BMP_IO,System.StrUtils;
 
 Type
-    TFormat = (INDEX,INDEXT,INDEXCMP,INDEXTCMP,COLOR8,RGB565,ARGB1555, RGBA5551, RGBA4444,BMP);
+    TFormat = (INDEX,INDEXT,INDEXCMP,INDEXTCMP,COLOR8,RGB565,ARGB1555, RGBA5551, RGBA4444,RGB888,RGBA8888,BMP);
 
   TMAT = class
     private
@@ -184,6 +184,44 @@ begin
        alpha_BitDif:=4;
      end;
 
+    if (matFormat =  RGB888) then
+     begin
+       ColorMode:=1;
+
+       bits:=24;
+       redbits:=8;
+       greenbits:=8;
+       bluebits:=8;
+       shiftR:=16;
+       shiftG:=8;
+       shiftB:=0;
+       RedBitDif:=0;
+       GreenBitDif:=0;
+       BlueBitDif:=0;
+       alpha_bpp:=8;
+       alpha_sh:=0;
+       alpha_BitDif:=0;
+     end;
+
+    if (matFormat =  RGBA8888) then
+     begin
+       ColorMode:=2;
+
+       bits:=32;
+       redbits:=8;
+       greenbits:=8;
+       bluebits:=8;
+       shiftR:=24;
+       shiftG:=16;
+       shiftB:=8;
+       RedBitDif:=0;
+       GreenBitDif:=0;
+       BlueBitDif:=0;
+       alpha_bpp:=8;
+       alpha_sh:=0;
+       alpha_BitDif:=0;
+     end;
+
     end;
  end;
  constructor TMAT.CreateFromBMPArray(ABMPARRAY:TBMPARRAY);
@@ -233,7 +271,15 @@ begin
  // self.bmap.Free;
   freeandnil(bmap);
   CMPData:=default(TCMPPal);
+//  if Bitstream<>nil then
+//     Bitstream.Clear;
+  SetLength(Imagedata16,0, 0);
+  SetLength(Imagedata8, 0, 0);
 
+  SetLength(matTextureHeaderA,0);
+  SetLength(matColorHeaderA,0);
+  SetLength(matMipmapHeaderA,0);
+  SetLength(ImageDataIndex,0);
  inherited;
 end;
 
@@ -324,6 +370,7 @@ begin
 
   bmap.free;
 end;
+
 function TMAT.SetSamplePerChannel(SourceRGBA:tagRGBQuad):tagRGBQuad;
 begin
    result.rgbRed:=SourceRGBA.rgbRed shr matFormatHeader.RedBitDif;
@@ -335,8 +382,6 @@ begin
     result.rgbReserved:=SourceRGBA.rgbReserved and 1;
 end;
 
-
-
 //Adds pixel data to a Tcolor array
 //each row is a cell that contains main image and any mips for that cell
 procedure TMAT.Convert(IsSubMipMap: Boolean);
@@ -346,6 +391,9 @@ type
   TRGBQuadArray = array[0..PixelCountMax - 1] of TRGBQuad;
   pRGBQuadArray = ^TRGBQuadArray;
 
+  TRGBTripleArray = ARRAY[Word] of TRGBTriple;
+  pRGBTripleArray = ^TRGBTripleArray;
+
   TByteArray = array[0..32767] of Byte;
   PByteArray = ^TByteArray;
 
@@ -353,9 +401,11 @@ var
  i,h,w,cellInedx:integer;
  DestRGBA:tagRGBQuad;
  RGBQuadLineArray: pRGBQuadArray;
+ RGBTrippleLineArray:pRGBTripleArray;
  IndexArray: PByteArray;
  row16:PWordArray;
   BMPFormat:TBMPFormat;
+ Dest16bitPixel:word;
 begin
 
 //if IsSubMipMap then
@@ -389,6 +439,7 @@ begin
 
         end;
 
+      {internal 32-bit bmp to 16-bit RGBA 4444}
       if ( (bits = 16) and (bmap.PixelFormat = pf32bit) )then
         begin
           for h := 0 to bmap.Height - 1 do
@@ -396,13 +447,45 @@ begin
              RGBQuadLineArray := bmap.ScanLine[h];
               for w := 0 to bmap.Width - 1 do
                 begin
-                 DestRGBA:=SetSamplePerChannel(RGBQuadLineArray[w]);
-                 self.ImageData16[cellInedx][Self.ImageDataIndex[cellInedx]].Create(DestRGBA.rgbRed,DestRGBA.rgbGreen,DestRGBA.rgbBlue,DestRGBA.rgbReserved,matFormatHeader);
+                 DestRGBA:=SetSamplePerChannel(RGBQuadLineArray^[w]);
+                 Dest16bitPixel:=DestRGBA.rgbRed shl 12 or DestRGBA.rgbGreen shl 8 or DestRGBA.rgbBlue shl 4 or DestRGBA.rgbReserved shl 0;
+                 //Dest16bitPixel:=65535; {all white test}
+                 //Dest16bitPixel:=65520; {all white test 0 alpha}
+                 bitstream.Write(Dest16bitPixel, sizeof(word));
+                // self.ImageData16[cellInedx][Self.ImageDataIndex[cellInedx]].Create(DestRGBA.rgbRed,DestRGBA.rgbGreen,DestRGBA.rgbBlue,DestRGBA.rgbReserved,matFormatHeader);
                  inc(Self.ImageDataIndex[cellInedx]);
                 end; //w
 
           end; //h
       end;
+
+     if ( (bits = 24) and (bmap.PixelFormat = pf24bit) )then
+        begin
+         for h := 0 to bmap.Height - 1 do
+            begin
+             RGBTrippleLineArray := bmap.ScanLine[h];
+             for w := 0 to bmap.Width - 1 do
+                begin
+                bitstream.Write(RGBTrippleLineArray^[w],sizeof(TRGBTriple));
+                inc(Self.ImageDataIndex[cellInedx]);
+                end;
+            end;
+        end;
+
+     if ( (bits = 32) and (bmap.PixelFormat = pf32bit) )then
+        begin
+         for h := 0 to bmap.Height - 1 do
+            begin
+             RGBQuadLineArray := bmap.ScanLine[h];
+             for w := 0 to bmap.Width - 1 do
+                begin
+                bitstream.Write(RGBQuadLineArray^[w],sizeof(TRGBQuad));
+                inc(Self.ImageDataIndex[cellInedx]);
+                end;
+            end;
+
+        end;
+
 
      if ( (bits = 16) and ( (BMPFormat = bf16bitA1555) or (BMPFormat = bf16bit565) ) )then
         begin
@@ -438,6 +521,7 @@ var
   I,N: Integer;
   Abytes: array of byte;
 begin
+
  ms := TMemoryStream.Create;
  ms.Write(matFormatHeader, sizeof(matFormatHeader));
 
@@ -472,6 +556,20 @@ begin
 
               end;
 
+           if matFormatHeader.bits = 24 then
+              begin
+              SetLength(Abytes, ImageDataIndex[N]*3);
+              bitstream.ReadBuffer(Abytes[0],ImageDataIndex[N]*3);
+              ms.Write(Abytes[0], ImageDataIndex[N]*3);
+              end;
+
+           if matFormatHeader.bits = 32 then
+              begin
+              SetLength(Abytes, ImageDataIndex[N]*4);
+              bitstream.ReadBuffer(Abytes[0],ImageDataIndex[N]*4);
+              ms.Write(Abytes[0], ImageDataIndex[N]*4);
+              end;
+
            if matFormatHeader.bits = 8 then
               begin
               //for I:= 0 to Length(ImageData8[N]) - 1 do
@@ -492,6 +590,10 @@ begin
            end;
 
       end;
+
+     {8.3 filename bug workaround}
+     if ContainsText(fname,'~1') then
+       fname:= StringReplace(fname, '~1', '_1', [rfReplaceAll, rfIgnoreCase]);
 
  Bitstream.Free;
  ms.SaveToFile(fname);
@@ -651,6 +753,7 @@ begin
        //add cells
        for i := 0 to matFormatHeader.cel_count - 1  do
           begin
+            if Assigned(self.bmap) then self.bmap.Assign(nil);
             BlockRead(f, matMipmapHeaderA[i], SizeOf(matMipmapHeaderA[i]));
 
             if (matMipmapHeaderA[i].SizeX >8000) or (matMipmapHeaderA[i].SizeX <=0) then
@@ -690,6 +793,8 @@ begin
        ARGB1555:result.fmt:='16-bit ARGB1555';
        RGBA4444:result.fmt:='16-bit RGBA4444';
        RGBA5551:result.fmt:='16-bit RGBA5551';
+       RGB888:result.fmt:='24-bit RGB';
+       RGBA8888:result.fmt:='32-bit RGBA';
        INDEX:result.fmt:='8-bit INDEXED';
        INDEXT:result.fmt:='8-bit trans INDEXED';
        COLOR8:result.fmt:='8-bit COLOR';
@@ -697,8 +802,9 @@ begin
        INDEXTCMP:result.fmt:='8-bit INDEXED trans int CMP';
       end;
 
-
- //    bmap.SaveToFile('D:\TestBMP\lastcell.bmp');
+ {$IFDEF DEBUG}
+     bmap.SaveToFile('D:\TestBMP\lastcell.bmp');
+ {$ENDIF}
   imageformat:=matformat;
   tempBMP.Free;
   CloseFile(f);
@@ -716,6 +822,10 @@ function TMAT.StrToFormat(str:string):TFORMAT;
       result:= TFORMAT.ARGB1555;
     if str.Equals('16-bit RGBA4444') then
       result:= TFORMAT.RGBA4444;
+    if str.Equals('24-bit RGB') then
+      result:= TFORMAT.RGB888;
+    if str.Equals('32-bit RGBA') then
+      result:= TFORMAT.RGBA8888;
     if str.Equals('16-bit RGBA5551') then
       result:= TFORMAT.RGBA5551;
     if str.Equals('8-bit INDEXED') then
@@ -744,6 +854,7 @@ var
   inrow: pRGBQuadArray;
   src:   word;
   cmp:TCMPPal;
+  sl: PUInt64;
 //  Bsrc:byte;
 //  IndexArray: PByteArray;
 begin
@@ -807,17 +918,17 @@ begin
    matformat:=TFormat.RGBA4444;
    bmap.PixelFormat := pf32bit;
    bmap.HandleType :=  bmDIB;
-   bmap.Alphaformat := afDefined;
+   bmap.Alphaformat := afIgnored;  {setting as defined seems to cause pre multiplication after conversion}
     for j := 0 to bmap.Height - 1 do
     begin
       inrow := bmap.ScanLine[j];
       for i := 0 to bmap.Width - 1 do
       begin
         BlockRead(f, src, sizeof(src));
-        inrow[i].rgbRed := ((src and 61440) shr 12) * 17;
-        inrow[i].rgbGreen := ((src and 3840) shr 8) * 17;
-        inrow[i].rgbBlue := ((src and 240) shr 4) * 17;
-        inrow[i].rgbReserved := ((src and 15) shr 0) * 17;
+        inrow^[i].rgbRed := ((src and 61440) shr 12) * 17;
+        inrow^[i].rgbGreen := ((src and 3840) shr 8) * 17;
+        inrow^[i].rgbBlue := ((src and 240) shr 4) * 17;
+        inrow^[i].rgbReserved := ((src and 15) shr 0) * 17;
 
 //        inrow[i].rgbRed := ((src and 61440) shr 12) shl 4;
 //        inrow[i].rgbGreen := ((src and 3840) shr 8) shl 4;
@@ -827,9 +938,30 @@ begin
 
     end;
 
-     //bmap.TransparentColor:= bmap.canvas.pixels[0,0];
-     bmap.TransparentMode:= tmAuto;
    end;
+
+   if (matFormatHeader.bits = 24)  then
+     begin
+     matformat:=TFormat.RGB888;
+     bmap.PixelFormat := pf24bit;
+     bmap.HandleType :=  bmDIB;
+
+     for h := 0 to bmap.Height - 1 do
+         BlockRead(f, bmap.ScanLine[h]^, 3 * bmap.Width);
+     end;
+
+
+    if (matFormatHeader.bits = 32) and (matFormatHeader.ColorMode = 2) and (matFormatHeader.alpha_bpp = 8)   then
+     begin
+     matformat:=TFormat.RGBA8888;
+     bmap.PixelFormat := pf32bit;
+     bmap.HandleType :=  bmDIB;
+     bmap.Alphaformat := afIgnored  ;  {setting as defined seems to cause pre multiplication after conversion}
+
+     for h := 0 to bmap.Height - 1 do
+         BlockRead(f, bmap.ScanLine[h]^, 4 * bmap.Width);
+
+     end;
 
    //indexed
    if (matFormatHeader.bits = 8) and (matFormatHeader.ColorMode = 0) and (matFormatHeader.mat_Type = 2) then

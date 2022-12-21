@@ -124,6 +124,8 @@ procedure Save32bitA(ABitmap: TBitmap;Alpha:boolean; const AFileName: string);
 procedure Save16bitA1555BMP(ABitmap: TBitmap; const AFileName: string);
 function GetPaddedRowSize(bpp,width:integer):integer;
 procedure BMP_Save(Abitmap:Tbitmap; filename: string);
+function BMPFMTtoStr(Format:TBMPFORMAT):string;
+function Convert32bitTo16bit(bmp32:Tbitmap):Tbitmap;
 var
 inputBMPFormat:TBMPFORMAT;
 
@@ -252,15 +254,17 @@ begin
       if (bmfmask.GreenMask = 2016) then  // 16-bit 565 format
       begin
         rin_bitmap.PixelFormat := pf16bit;  //allways define pf first
+        rin_bitmap.HandleType :=  bmDIB;
         rin_bitmap.Width := bminfo.Width;
         rin_bitmap.Height := bminfo.Height;
         formatgood := True;
         inputBMPFormat:=bf16bit565;
       end;
 
-      if (bmfmask.GreenMask = 240) then  // 16-bit 4444 format
+      if (bmfmask.GreenMask = 240) or (bmfmask.GreenMask = 3840) then  // 16-bit 4444 format
       begin
         rin_bitmap.PixelFormat := pf32bit;  //VCL doesn't support display of 4444 so we'll convert to 32bit
+        rin_bitmap.HandleType :=  bmDIB;
         rin_bitmap.SetSize(bminfo.Width,bminfo.Height);
         formatgood := true;
         if hasAlpha then inputBMPFormat:=bf16bitA444  //can read alpha format in header since we are loading an externally created bitmap
@@ -271,6 +275,7 @@ begin
     if (bminfo.Compression = BI_RGB) or (bmfmask.GreenMask = 992) then  //BI_RGB 1555 doesn't have a fieldmask header
     begin
       rin_bitmap.PixelFormat := pf15bit;  //allways define pf first
+      rin_bitmap.HandleType :=  bmDIB;
       rin_bitmap.Width := bminfo.Width;
       rin_bitmap.Height := bminfo.Height;
       formatgood := True;
@@ -289,7 +294,7 @@ begin
      if (rin_bitmap.PixelFormat = pf32bit) and (bmfmask.GreenMask = 240) then
      begin
 
-       rin_bitmap.AlphaFormat:=afdefined;
+       rin_bitmap.AlphaFormat:=afIgnored;  {setting as defined seems to cause pre multiplication after conversion}
        for j := rin_bitmap.Height - 1 downto 0 do
           begin
             inrow := rin_bitmap.ScanLine[j];
@@ -320,15 +325,16 @@ begin
     seek(f, bmhead.BitmapOffset); //warp to bitmap data
 
     rin_bitmap.PixelFormat := pf24bit;  //allways define pf first
+    rin_bitmap.HandleType :=  bmDIB;
     rin_bitmap.Width := bminfo.Width;
     rin_bitmap.Height := bminfo.Height;
     formatgood := True; //FIX ME
-
+    inputBMPFormat:=bf24bit;
     //read in bitmap
     for i := bminfo.Height - 1 downto 0 do
       BlockRead(f, rin_bitmap.Scanline[i]^, bminfo.Width * 3);
 
-    Result := rin_bitmap;
+    Result.Assign(rin_bitmap);
     CloseFile(f);
   end; // end of 24-bit
 
@@ -349,9 +355,11 @@ begin
     seek(f, bmhead.BitmapOffset); //warp to bitmap data
 
     rin_bitmap.PixelFormat := pf32bit;  //allways define pf first
+    rin_bitmap.HandleType :=  bmDIB;
     rin_bitmap.Width := bminfo.Width;
     rin_bitmap.Height := bminfo.Height;
     formatgood := True; //FIX ME
+    inputBMPFormat:=bf32bit;
 
     //read in bitmap
     if (bminfo.Compression = BI_RGB) or (bmfmask.GreenMask = $0000FF00) then
@@ -386,29 +394,29 @@ begin
 
 
 
-    png := TPngImage.Create();
-
-
+//    png := TPngImage.Create();
+//
+//
     Result.Assign(rin_bitmap);
     CloseFile(f);
-
-    png.Assign(rin_bitmap);
-    png.CreateAlpha;
-
-    for J:=0 to rin_bitmap.Height - 1 do
-      begin
-      BMPInRow := rin_bitmap.ScanLine[J];
-      RowAlpha := png.AlphaScanline[J];
-        for i:=0 to rin_bitmap.Width - 1 do
-          RowAlpha[i] := BMPInRow[i].rgbReserved;
-
-
-
-
-      end;
-
-
-    png.SaveToFile('D:\TestBMP\Test32Save.png');
+//
+//    png.Assign(rin_bitmap);
+//    png.CreateAlpha;
+//
+//    for J:=0 to rin_bitmap.Height - 1 do
+//      begin
+//      BMPInRow := rin_bitmap.ScanLine[J];
+//      RowAlpha := png.AlphaScanline[J];
+//        for i:=0 to rin_bitmap.Width - 1 do
+//          RowAlpha[i] := BMPInRow[i].rgbReserved;
+//
+//
+//
+//
+//      end;
+//
+//
+//    png.SaveToFile('D:\TestBMP\Test32Save.png');
    // Save32bitA(Result,hasAlpha,'D:\TestBMP\Test32Save.bmp');
    //Result.SaveToFile('D:\TestBMP\Test32Save.bmp');
   end; // end of 32-bit
@@ -765,6 +773,73 @@ begin
 
 end;
 
+procedure Save16bit4444(ABitmap: TBitmap; const AFileName: string);
+const
+  PixelCountMax = 65536;  // 2048 MAX WIDTH
+type
+  TRGBQuadArray = array[0..PixelCountMax - 1] of TRGBQuad;
+  pRGBQuadArray = ^TRGBQuadArray;
+var
+  FS: TFileStream;
+  BFH: TBMPHeader;
+  BIH: TBMPInfo;
+  BIHEX:TBMPInfoV4ext;
+  y,w: Integer;
+  sl: PWordArray;
+  RGBQuadLineArray: pRGBQuadArray;
+  DestRGBA:tagRGBQuad;
+  Dest16bitPixel:word;
+begin
+  FS := TFileStream.Create(AFileName, fmCreate);
+  try
+
+    // Bitmap file header
+    FillChar(BFH, SizeOf(BFH), 0);
+    BFH.tag := $4D42;  // BM
+    BFH.filesize := 2 * ABitmap.Width * ABitmap.Height + SizeOf(BFH) + SizeOf(BIH)+ SizeOf(BIHEX);
+    BFH.BitmapOffset := SizeOf(BFH) + SizeOf(BIH) + SizeOf(BIHEX);
+    FS.Write(BFH, SizeOf(BFH));
+
+    // Bitmap info header
+    FillChar(BIH, SizeOf(BIH), 0);
+    BIH.Size := SizeOf(BIH)+SizeOf(BIHEX);
+    BIH.Width := ABitmap.Width;
+    BIH.Height := ABitmap.Height;
+    BIH.Planes := 1;
+    BIH.BitsPerPixel := 16;
+    BIH.Compression := BI_BITFIELDS;
+    BIH.SizeOfBitmap := 2 * (ABitmap.Width * ABitmap.Height);
+    FillChar(BIHEX, SizeOf(BIHEX), 0);
+    BIHEX.RedMask:=$F000;
+    BIHEX.GreenMask:=$F00;
+    BIHEX.BlueMask:=$F0;
+    BIHEX.AlphaMask:=$F;
+    FS.Write(BIH, SizeOf(BIH));
+    FS.Write(BIHEX, SizeOf(BIHEX));
+
+    // Pixels
+    for y := ABitmap.Height - 1 downto 0 do
+    begin
+      RGBQuadLineArray := ABitmap.ScanLine[y];
+      for w := 0 to ABitmap.Width - 1 do
+        begin
+        DestRGBA.rgbRed:=RGBQuadLineArray[w].rgbRed shr 4;
+        DestRGBA.rgbGreen:=RGBQuadLineArray[w].rgbGreen shr 4;
+        DestRGBA.rgbBlue:=RGBQuadLineArray[w].rgbBlue shr 4;
+        DestRGBA.rgbReserved:=RGBQuadLineArray[w].rgbReserved shr 4;
+
+        Dest16bitPixel:=DestRGBA.rgbRed shl 12 or DestRGBA.rgbGreen shl 8 or DestRGBA.rgbBlue shl 4 or DestRGBA.rgbReserved shl 0;
+        FS.Write(Dest16bitPixel, sizeof(word));
+        end;
+      //FS.Write(sl^, 2 * ABitmap.Width);
+    end;
+
+  finally
+    FS.Free;
+  end;
+
+end;
+
 
 procedure Save32bitA(ABitmap: TBitmap;Alpha:boolean; const AFileName: string);
 var
@@ -798,10 +873,13 @@ begin
     FillChar(BIHEX, SizeOf(BIHEX), 0);
     BIHEX.AlphaMask:=$00000000;
       if Alpha then
-        BIHEX.AlphaMask:=$FF000000;
+    BIHEX.AlphaMask:=$FF000000;
+   // BIHEX.RedMask:= $000000FF;
     BIHEX.RedMask:=  $00FF0000;
     BIHEX.GreenMask:=$0000FF00;
     BIHEX.BlueMask:= $000000FF;
+    //BIHEX.BlueMask:=  $00FF0000;
+
     BIHEX.CSType:=  $73524742;
     FS.Write(BIH, SizeOf(BIH));
     FS.Write(BIHEX, SizeOf(BIHEX));
@@ -845,14 +923,39 @@ begin
     Save16bit565(Abitmap, filename);
     end;
 
+   if BMPFormat = bf24bit then
+    begin
+    Abitmap.SaveToFile(filename);
+    end;
+
    if BMPFormat = bf32bit then
     begin
     Save32bitA(Abitmap,true, filename);
+    //Save16bit4444(Abitmap, filename); {not tested}
     end;
 
+end;
 
+function BMPFMTtoStr(Format:TBMPFORMAT):string;
+begin
+//TBMPFormat = (bf8bit, bf16bitX1555, bf16bitA1555, bf16bitX444,bf16bitA444, bf16bit565, bf24bit, bf32bit, bfCustom);
+ case Format of
+   bf8bit: result:='bf8bit';
+   bf16bitX1555: result:='bf16bitX1555';
+   bf16bitA1555: result:='bf16bitA1555';
+   bf16bitX444: result:='bf16bitX444';
+   bf16bitA444: result:='bf16bitA444';
+   bf16bit565: result:='bf16bit565';
+   bf24bit: result:='bf24bit';
+   bf32bit: result:='bf32bit';
+   bfCustom: result:='bfCustom';
+ end;
+end;
 
-
+function Convert32bitTo16bit(bmp32:Tbitmap):Tbitmap;
+begin
 
 end;
+
+
 end.

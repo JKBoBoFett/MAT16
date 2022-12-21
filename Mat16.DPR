@@ -1,9 +1,15 @@
 program Mat16;
 
-{$R *.dres}
+
 
 uses
+ {$IFDEF DEBUG}
   FastMM4 in 'FastMM4\FastMM4.pas',
+  FastMM4DataCollector in 'FastMM4\FastMM4DataCollector.pas',
+  FastMM4LockFreeStack in 'FastMM4\FastMM4LockFreeStack.pas',
+  FastMM4Messages in 'FastMM4\FastMM4Messages.pas',
+ {$ENDIF}
+  //FastMM4 in 'FastMM4\FastMM4.pas',
   Forms,
   MAIN in 'MAIN.PAS' {MainForm},
   Batch in 'Batch.pas' {BatchForm},
@@ -23,13 +29,12 @@ uses
   ColorMap in 'ColorMap.pas',
   options in 'options.pas' {OptionsForm},
   CMPHeaders in 'CMPHeaders.pas',
-  FastMM4DataCollector in 'FastMM4\FastMM4DataCollector.pas',
-  FastMM4LockFreeStack in 'FastMM4\FastMM4LockFreeStack.pas',
-  FastMM4Messages in 'FastMM4\FastMM4Messages.pas',
+
   CNDHeaders in 'CNDHeaders.pas',
   Set8bitFormatOnOpen in 'Set8bitFormatOnOpen.pas' {Set8bitFormatForm},
   EditMat in 'EditMat.pas' {EditMatForm},
-  BMP_IO in 'BMP_IO.pas';
+  BMP_IO in 'BMP_IO.pas',
+  GloabalVars in 'GloabalVars.pas';
 
 // MemCheck;
 {$R *.RES}
@@ -47,7 +52,10 @@ MemChk;
  }
  //  ReportMemoryLeaksOnShutdown := DebugHook <> 0;
   // Application.CreateForm(TOptionsForm, OptionsForm);
-   {$INCLUDE FastMM4\FastMM4Options.inc}
+//   {$INCLUDE FastMM4\FastMM4Options.inc}
+ {$IFDEF DEBUG}
+  {$INCLUDE FastMM4\FastMM4Options.inc}
+ {$ENDIF}
   Application.CreateForm(TMainForm, MainForm);
   Application.CreateForm(Tgobview, gobview);
   Application.CreateForm(TViewTiled, ViewTiled);

@@ -31,7 +31,7 @@ type
     Label15:   TLabel;
     Label16:   TLabel;
     Label17:   TLabel;
-    Button2:   TButton;
+    ConvertToBmp: TButton;
     Label18:   TLabel;
     Label_CMP: TLabel;
     procedure ListBox1Click(Sender: TObject);
@@ -39,8 +39,7 @@ type
     procedure opengob(filename: string);
     procedure openbaf(filename: string);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
-    procedure Button1Click(Sender: TObject);
-    procedure Button2Click(Sender: TObject);
+    procedure ConvertToBmpClick(Sender: TObject);
   private
     { Private declarations }
   public
@@ -55,7 +54,7 @@ var
 
 implementation
 
-uses Batch;
+uses Batch,GloabalVars;
 
 {$R *.DFM}
 
@@ -138,7 +137,7 @@ end;
  FileOffsets:=bafFilesToArray(filename, '.MAT');
  tempList:=gobFileArrayToList(FileOffsets);
  ListBox1.Items.Assign(tempList);
-tempList.Free;
+ tempList.Free;
 
  end;
 
@@ -158,64 +157,28 @@ end;
 procedure Tgobview.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   listbox1.Clear;
+  SetLength(FileOffsets,0);
+  SetLength(CMPOffsets,0);
+
 end;
 
-procedure Tgobview.Button1Click(Sender: TObject);
-begin
-  main.MainForm.Image1.Picture.Bitmap.Assign(image1.Picture.Bitmap);
- // main.MainForm.LabelWidth.Caption := Label6.Caption;
-  main.MainForm.LabelHeight.Caption := Label17.Caption;
-  main.MainForm.LabelFormat.Caption := label15.Caption;
-  main.MainForm.Label3.Caption := '1';
-  image1.Picture.Bitmap.FreeImage;
-  listbox1.Clear;
-  gobview.Close;
-end;
-
-procedure Tgobview.Button2Click(Sender: TObject);
+procedure Tgobview.ConvertToBmpClick(Sender: TObject);
 var
   i: integer;
-  savebitmap: Tbitmap;
-  bestcmp, gpath, mpath, fext, mname: string;
 begin
- // savebitmap := Tbitmap.Create;
-  gpath := ExtractFilePath(Label_FileName.Caption);
-  fext  := ExtractName(Label_FileName.Caption);
-  fext  := ChangeFileExt(fext, '');
-  gpath := gpath + fext;
   Screen.Cursor := crHourGlass;
-  CreateDir(gpath);
   BatchForm.Show;
-
   BatchForm.ProgressBar1.Max := ListBox1.Items.Count;
-
 
   for i := 0 to (ListBox1.Items.Count - 1) do
   begin
     BatchForm.ProgressBar1.Position := i;
-    //savebitmap := Tbitmap.Create;
-    //savebitmap:=nil;
-    bestcmp    := GetbestCMP(listBox1.Items.Strings[i], Label_FileName.Caption);
- //   ReadCMPfromGOB(Label_FileName.Caption, bestcmp);
-    mainform.gridPalette.Repaint;
-
- //   saveBitmap:=ReadMatfromGOB(Label_FileName.Caption, listBox1.Items.Strings[i]);
-    mname      := ExtractName(listBox1.Items.Strings[i]);
-    mname      := ChangeFileExt(mname, '.BMP');
-    mpath      := gpath + '\' + mname;
-    saveBitmap.SaveToFile(mpath);
-
-    BatchForm.Memo1.Lines.Add('Saved ' + mpath + ' cmp:' + bestcmp);
+    BatchForm.Memo1.Lines.Add(GobMatSavetoBMP(Label_FileName.Caption, listBox1.Items.Strings[i],FileOffsets,CMPOffsets,true));
     application.ProcessMessages;
-
-    saveBitmap.Free;
-
   end;
 
   BatchForm.Memo1.Lines.Add('-Done-');
   Screen.Cursor := crDefault;
-
-  //if Assigned(saveBitmap) then saveBitmap.Free;
 end;
 
 end.

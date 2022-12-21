@@ -1,11 +1,11 @@
-object EditMatForm: TEditMatForm
+object EditMTSForm: TEditMTSForm
   Left = 0
   Top = 0
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
-  Caption = 'EditMatForm'
-  ClientHeight = 322
-  ClientWidth = 526
+  Caption = 'EditMTSForm'
+  ClientHeight = 334
+  ClientWidth = 518
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -13,9 +13,6 @@ object EditMatForm: TEditMatForm
   Font.Name = 'Tahoma'
   Font.Style = []
   OldCreateOrder = False
-  Position = poMainFormCenter
-  OnClose = FormClose
-  OnShow = FormShow
   PixelsPerInch = 120
   TextHeight = 16
   object Label1: TLabel
@@ -51,7 +48,6 @@ object EditMatForm: TEditMatForm
     Width = 113
     Height = 153
     TabOrder = 0
-    OnClick = CellsListBoxClick
   end
   object MipsListBox: TListBox
     Left = 368
@@ -59,7 +55,6 @@ object EditMatForm: TEditMatForm
     Width = 113
     Height = 153
     TabOrder = 1
-    OnClick = MipsListBoxClick
   end
   object Panel1: TPanel
     Left = 8
@@ -88,7 +83,6 @@ object EditMatForm: TEditMatForm
     Caption = 'OK'
     ModalResult = 1
     TabOrder = 3
-    OnClick = OKButtonClick
   end
   object Options: TGroupBox
     Left = 10
@@ -120,16 +114,15 @@ object EditMatForm: TEditMatForm
       TabOrder = 0
     end
     object AddCellButton: TButton
-      Left = 398
-      Top = 17
-      Width = 91
+      Left = 396
+      Top = 28
+      Width = 75
       Height = 25
       Hint = 'bmp must match internal format'
       Caption = 'Add Cell'
       ParentShowHint = False
       ShowHint = True
       TabOrder = 1
-      OnClick = AddCellButtonClick
     end
     object FormatComboBox: TComboBox
       Left = 14
@@ -138,28 +131,23 @@ object EditMatForm: TEditMatForm
       Height = 24
       TabOrder = 2
       Text = 'Select Internal Format'
-      OnClick = FormatComboBoxClick
       Items.Strings = (
         '8-bit '
         '8-bit Transparent'
         '16-bit 565'
         '16-bit 1555 Transparent'
-        '16-bit 4444 (custom engine)'
-        '24-bit 888 (custom engine)'
-        '32-bit 8888 (custom engine)')
+        '16-bit 4444 (custom engine)')
     end
-    object RemoveCellButton: TButton
-      Left = 397
-      Top = 47
-      Width = 92
-      Height = 25
-      Hint = 'Removes selected cell'
-      Caption = 'Remove Cell'
-      ParentShowHint = False
-      ShowHint = True
-      TabOrder = 3
-      OnClick = RemoveCellButtonClick
-    end
+  end
+  object LoadButton: TButton
+    Left = 83
+    Top = 283
+    Width = 75
+    Height = 25
+    Caption = 'load mts'
+    ModalResult = 1
+    TabOrder = 5
+    OnClick = LoadButtonClick
   end
   object OpenPic: TOpenPictureDialog
     Left = 176
