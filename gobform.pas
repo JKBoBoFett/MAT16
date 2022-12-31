@@ -40,6 +40,7 @@ type
     procedure openbaf(filename: string);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure ConvertToBmpClick(Sender: TObject);
+    procedure openfolder(foldername: string);
   private
     { Private declarations }
   public
@@ -54,7 +55,7 @@ var
 
 implementation
 
-uses Batch,GloabalVars;
+uses Batch,GloabalVars,IOUtils,types;
 
 {$R *.DFM}
 
@@ -72,6 +73,7 @@ begin
 
   if (UpperCase(ExtractFileExt(Label_FileName.Caption)) = '.GOB') or
      (UpperCase(ExtractFileExt(Label_FileName.Caption)) = '.GOO') or
+     (UpperCase(ExtractFileExt(Label_FileName.Caption)) = '.MAT') or
      (UpperCase(ExtractFileExt(Label_FileName.Caption)) = '.BAF') then
   begin
 
@@ -98,11 +100,23 @@ begin
      gobCMP.LoadCMPFromBAFFile(Label_FileName.Caption, 336);
      end;
 
-   Mat:=TMAT.Create(TFormat.BMP);
-   Mat.SetCMP(gobCMP.GetRGB);
+
+    Mat:=TMAT.Create(TFormat.BMP);
+
+  if (UpperCase(ExtractFileExt(Label_FileName.Caption)) = '.MAT') then
+     begin
+     pos:=0;
+     Label_FileName.Caption:=Label_SelectedFile.Caption;
+      Mat.SetCMP(MainCMP.GetRGB);
+     end;
 
   // pos:=GetGOBFileOffset(Label_FileName.Caption,Label_SelectedFile.Caption);
+  if (UpperCase(ExtractFileExt(Label_FileName.Caption)) <> '.MAT') then
+   begin
    pos:=GetGOBArrayOffset(FileOffsets, Label_SelectedFile.Caption);
+   Mat.SetCMP(gobCMP.GetRGB);
+   end;
+
    Label_Offset.Caption := IntToStr(pos);
    tempA:= Mat.LoadFromFile(Label_FileName.Caption,pos);
 
@@ -113,7 +127,7 @@ begin
 
    label15.Caption:=tempA.fmt;
 
-   main.MainForm.BMPArrayDisplay(tempA, Mat);
+   main.MainForm.BMPArrayDisplay(tempA, Mat);  //function frees resources
    gobCMP.Free;
    //Mat.free;
    //BMPArray.Free;
@@ -139,6 +153,26 @@ end;
  ListBox1.Items.Assign(tempList);
  tempList.Free;
 
+ end;
+
+ procedure Tgobview.openfolder(foldername: string);
+ var
+  aFiles: TStringDynArray;
+  sFile: String;
+ begin
+  Label_FileName.Caption:='folder.mat';
+
+  aFiles := TDirectory.GetFiles(foldername, '*.mat');
+
+  ListBox1.Items.BeginUpdate;
+  try
+    for sFile in aFiles do
+      ListBox1.Items.Add(sFile);
+  finally
+    ListBox1.Items.EndUpdate;
+  end;
+
+  CMPOffsets:=gobFilesToArray(jkpath, '.CMP');
  end;
 
 procedure Tgobview.opengob(filename: string);
@@ -173,7 +207,10 @@ begin
   for i := 0 to (ListBox1.Items.Count - 1) do
   begin
     BatchForm.ProgressBar1.Position := i;
-    BatchForm.Memo1.Lines.Add(GobMatSavetoBMP(Label_FileName.Caption, listBox1.Items.Strings[i],FileOffsets,CMPOffsets,true));
+    if (UpperCase(ExtractFileExt(Label_FileName.Caption)) <> '.MAT') then
+     BatchForm.Memo1.Lines.Add(GobMatSavetoBMP(Label_FileName.Caption, listBox1.Items.Strings[i],FileOffsets,CMPOffsets,true))
+    else
+     BatchForm.Memo1.Lines.Add(GobMatSavetoBMP('', listBox1.Items.Strings[i],FileOffsets,CMPOffsets,false));
     application.ProcessMessages;
   end;
 

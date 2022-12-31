@@ -230,6 +230,7 @@ end;
 
 function IsBMPmipsOK(Abitmap:tbitmap): boolean;
 begin
+result:=false;
   if (Abitmap.Width >= 8) and (Abitmap.Height >=8) and
      (Abitmap.PixelFormat <> pf32bit) then
   result:=true;
@@ -239,6 +240,7 @@ end;
 
 function IsBMPPowerOfTwo(x,y: integer): boolean;
 begin
+result:=false;
    if poweroftwo(x) and poweroftwo(y) then
    result:=true;
 end;

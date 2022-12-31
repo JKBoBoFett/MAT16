@@ -191,7 +191,7 @@ resize := Tbitmap.Create;
      if IsBMPmipsOK(loadbmp) then
        begin
 
-       if (loadbmp.Height > 256) or (loadbmp.Width > 256) then
+       if ( (loadbmp.Height > 256) or (loadbmp.Width > 256) ) and (MipRadioGroup.ItemIndex >0 ) then
           begin
             with TTaskDialog.Create(self) do
             try

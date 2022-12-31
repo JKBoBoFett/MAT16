@@ -198,7 +198,7 @@ begin
        RedBitDif:=0;
        GreenBitDif:=0;
        BlueBitDif:=0;
-       alpha_bpp:=8;
+       alpha_bpp:=0;
        alpha_sh:=0;
        alpha_BitDif:=0;
      end;

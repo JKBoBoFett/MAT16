@@ -108,7 +108,7 @@ end;
 
 procedure TCMP.LoadCMPFromBAFFile(filename: string; pos: longint);
  var
-  cmph: TCMPHeader;
+ // cmph: TCMPHeader;
   fcmp: file;
 begin
   AssignFile(fcmp, filename);
@@ -278,6 +278,7 @@ datalines: TStringList;
 line:string;
 i,j:integer;
 begin
+{$IFDEF DEBUG}
   line:='';
     for i := 0 to 63 do
      begin
@@ -292,6 +293,7 @@ begin
 
    datalines.SaveToFile(filename);
    datalines.free;
+{$ENDIF}
 end;
 
 function GetbestCMP(matname: string; gobname: string): string;

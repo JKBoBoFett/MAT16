@@ -89,7 +89,8 @@ type
     N2: TMenuItem;
     N6: TMenuItem;
     N9: TMenuItem;
-    Createnewmatfrombmps1: TMenuItem;  { Save &As... }
+    Createnewmatfrombmps1: TMenuItem;
+    Browsematsinfolder1: TMenuItem;  { Save &As... }
     procedure FileOpen(Sender: TObject);
     procedure FileSaveAs(Sender: TObject);
     procedure FileExit(Sender: TObject);
@@ -140,6 +141,7 @@ type
     procedure TrackBarChange;
     procedure Createnewmatfrombmps1Click(Sender: TObject);
     procedure EditMTS1Click(Sender: TObject);
+    procedure Browsematsinfolder1Click(Sender: TObject);
   end;
 
 var
@@ -308,7 +310,44 @@ begin
    tempBMP.Free;
 
 end;
- procedure TMainForm.TrackBarChange;
+ procedure TMainForm.Browsematsinfolder1Click(Sender: TObject);
+begin
+   //SaveAlphaChannel1.Enabled := False;
+//  optionsform.readoptions;
+  image1.Transparent := False;
+  VIewasTransparent1.Checked := False;
+  image1.Picture.Bitmap.Width := 32;
+  image1.Picture.Bitmap.Height := 32;
+  image1.Picture.Bitmap.Assign(nil);
+  //Cell_ImageList.Clear;
+  // Cell_TrackBar.Visible:=False;
+
+
+  image1.Transparent := False;
+  VIewasTransparent1.Checked := False;
+
+  with TFileOpenDialog.Create(nil) do
+  try
+    Options := [fdoPickFolders];
+    if Execute then
+      begin
+      //ShowMessage(FileName);
+       gobview.openfolder(FileName);
+       gobview.Show;
+      end;
+  finally
+    Free;
+  end;
+
+
+
+//  if OpenDialog1.Execute then
+//  begin
+//
+//  end;
+end;
+
+procedure TMainForm.TrackBarChange;
  var
 tmpBMP:Tbitmap;
 begin
@@ -1060,7 +1099,11 @@ begin
       MainCMP.LoadCMPFromFile(OpenDialogcmp.FileName,0);
       //loadcmp(OpenDialogcmp.FileName,0);
       gridPalette.Repaint;
+       SetLightLevel(63);
+   BMPArray.RemapArrayfromCMP(MainCMP);
+  TrackBarChange;
 
+  gridPalette.Repaint;
 //      if image1.picture.bitmap.PixelFormat = pf8bit then
 //      begin
 //        if UpperCase(ExtractFileExt(OpenDialog.FileName)) = '.MAT' then
