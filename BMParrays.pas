@@ -137,9 +137,9 @@ begin
 
   if cel_count > 0 then
   begin
-      if (bmap.Height <> CellBitmaps[0].Height) or
-         (bmap.Width <> CellBitmaps[0].Width) then
-         raise Exception.Create('Bitmaps are not the same size!');
+//      if (bmap.Height <> CellBitmaps[0].Height) or
+//         (bmap.Width <> CellBitmaps[0].Width) then
+//         raise Exception.Create('Bitmaps are not the same size!');
 
          if bmap.PixelFormat <> CellBitmaps[0].PixelFormat then
          raise Exception.Create('Bitmaps are not the same pixel format!');
@@ -425,6 +425,11 @@ end;
 
    WriteLn(OutFile, 'TEXTURES: '+inttostr(self.GetCellCount) );
 
+   if ContainsText(filename,'..') then
+          begin
+           mpath      := gpath + mname;
+          end;
+
    for J := 0 to self.GetCellCount - 1 do
       begin
       //savebitmap:=Tbitmap.Create;
@@ -432,20 +437,22 @@ end;
       //savebitmap.Assign(self.GetCell(J));
       mname      := ExtractName(filename);
       mname      := TPath.GetFileNameWithoutExtension(mname);
+      mname      := ReplaceText(mname, '.', '');  //mots file name bug
       mname      := mname+'_Cell'+inttostr(j);
       mname      := ChangeFileExt(mname, '.bmp');
+     // mname      :=mname+'.bmp';
       mpath      := gpath + mname;
 
       Write(OutFile,mname);
 
        if (UpperCase(ExtractFileExt(mpath)) <> '.BMP') then
         begin
-         raise Exception.Create('Save MTS Cell wrong file type');
+         raise Exception.Create('Save MTS Cell wrong file type '+mpath);
         end;
 
          if not ContainsText(mpath,'_Cell') then
           begin
-           raise Exception.Create('Save MTS Cell wrong file type');
+           raise Exception.Create('Save MTS Cell wrong file type '+mpath);
           end;
 
       BMP_Save(saveBitmap, mpath);

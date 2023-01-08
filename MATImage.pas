@@ -704,6 +704,16 @@ begin
     if matFormatHeader.tag <> 'MAT ' then
      raise Exception.Create('Not a valid MAT file!');
 
+     if (matFormatHeader.ver <> 10) and (matFormatHeader.ver <> 50) then
+        raise Exception.Create('Invalid Mat Version!');
+
+     if matFormatHeader.ver = 10 then    //  '01narsky.mat' in mots
+      begin
+       matFormatHeader.mat_Type := 2;
+       matFormatHeader.bits :=8;
+      end;
+
+
      //flat color mat
      if matFormatHeader.mat_Type = 0 then
      begin
@@ -742,7 +752,6 @@ begin
 
        SetLength(matMipmapHeaderA, matFormatHeader.cel_count );
 
-
        //read internal cmp
        if matFormatHeader.mat_Type = 3 then
          begin
@@ -758,6 +767,8 @@ begin
 
             if (matMipmapHeaderA[i].SizeX >8000) or (matMipmapHeaderA[i].SizeX <=0) then
               raise Exception.Create('Invalid Size in MipHeader!');
+
+            if (matMipmapHeaderA[i].NumMipMaps >3) then matMipmapHeaderA[i].NumMipMaps:=1; // bug fix for 01narsky.mat in mots
 
             toBMP(matMipmapHeaderA[i].SizeX,matMipmapHeaderA[i].SizeY);
             result.AddCellFromBMP(bmap);
