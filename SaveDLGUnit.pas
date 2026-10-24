@@ -3,7 +3,7 @@ unit SaveDLGUnit;
 interface
 
 uses Windows, SysUtils, Classes, Graphics, Forms, Controls, StdCtrls,
-  Buttons, ExtCtrls, mat_read, MATImage;
+  Buttons, ExtCtrls, MATImage;
 
 type
   TMATSaveDlg = class(TForm)

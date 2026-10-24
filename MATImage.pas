@@ -10,6 +10,7 @@ Type
     private
     BitStream:TMemoryStream;
     isTransparent:Boolean;
+    FEmissive:Boolean;   {texture flag 2: alpha is a glow mask}
     transparentColor : longint;
     matFormatHeader:TMatHeader;
     matTextureHeaderA: Array of TTextureHeader;
@@ -43,9 +44,11 @@ Type
      function HeadersToJSON:TstringList;
      property transparentColorValue: Integer read transparentColor write transparentColor;
      property GetMatFormat:TFormat read matFormat;
+     property Emissive:Boolean read FEmissive write FEmissive;
      function LoadFromFile(filename: string;pos: longint=0): TBMPARRAY;
      procedure ReadMATfromPOS(filename: string; pos: longint);
      procedure SetCMP(CMP:TCMPPal);
+     procedure ApplyPalette(Bmp: TBitmap; const Pal: TCMPPal);
 
      constructor Create(format:TFormat);
      constructor CreateFromBMPArray(ABMPARRAY:TBMPARRAY);
@@ -233,6 +236,7 @@ begin
   Bitstream.Seek(0, soFromBeginning);
 
   Create(self.StrToFormat(ABMPARRAY.fmt));
+  FEmissive := Pos('emissive', LowerCase(ABMPARRAY.fmt)) > 0;
 
    if matFormatHeader.mat_Type = 0 then
       begin
@@ -244,7 +248,7 @@ begin
 
   if matFormatHeader.mat_Type <> 0 then
       begin
-
+         transparentColor:=ABMPARRAY.transparentColorValue;
       for J := 0 to ABMPARRAY.GetCellCount - 1 do
           begin
 
@@ -288,6 +292,25 @@ begin
   CMPData:=CMP;
 end;
 
+{puts a 256 colour palette on any 8-bit bitmap}
+procedure TMAT.ApplyPalette(Bmp: TBitmap; const Pal: TCMPPal);
+var
+  log_pal: TMaxLogPalette;
+  i: integer;
+begin
+  for i := 0 to 255 do
+    begin
+      log_pal.palPalEntry[i].peRed   := Pal[i].r;
+      log_pal.palPalEntry[i].peGreen := Pal[i].g;
+      log_pal.palPalEntry[i].peBlue  := Pal[i].b;
+      log_pal.palPalEntry[i].peFlags := 0;
+    end;
+  log_pal.palVersion := $300;
+  log_pal.palNumEntries := 256;
+  Bmp.Palette := CreatePalette(PLogPalette(@log_pal)^);
+  Bmp.Modified := True;
+end;
+
 procedure TMAT.AddColorCell(Value: longint);
 begin
  matFormatHeader.record_count:=matFormatHeader.record_count+1;
@@ -323,7 +346,8 @@ begin
   with matTextureHeaderA[matFormatHeader.record_count-1] do
     begin
       textype:=8;
-      transparent_color:=0;
+      //transparent_color:=0;
+      transparent_color:=transparentColor;
       for i := 0 to 2 do pads[i] := 0;
       unk1tha:=0;
       unk1thb:=0;
@@ -340,6 +364,10 @@ begin
 
    if (matFormat = ARGB1555) or (matFormat = INDEXT) or  (matFormat = INDEXTCMP) then
   matMipmapHeaderA[matFormatHeader.cel_count-1].TransparentBool:=1;
+
+  {emissive: the alpha bits are a glow mask, the surface itself is opaque}
+  if FEmissive and (matFormatHeader.bits = 16) then
+  matMipmapHeaderA[matFormatHeader.cel_count-1].TransparentBool:=2;
 
   if matFormatHeader.bits = 16 then
   SetLength(Imagedata16, matFormatHeader.cel_count, bmap.Width*bmap.Height );
@@ -439,7 +467,7 @@ begin
 
         end;
 
-      {internal 32-bit bmp to 16-bit RGBA 4444}
+      {internal 32-bit bmp to 16-bit RGBA 4444 or RGBA 5551, layout comes from the header}
       if ( (bits = 16) and (bmap.PixelFormat = pf32bit) )then
         begin
           for h := 0 to bmap.Height - 1 do
@@ -448,7 +476,7 @@ begin
               for w := 0 to bmap.Width - 1 do
                 begin
                  DestRGBA:=SetSamplePerChannel(RGBQuadLineArray^[w]);
-                 Dest16bitPixel:=DestRGBA.rgbRed shl 12 or DestRGBA.rgbGreen shl 8 or DestRGBA.rgbBlue shl 4 or DestRGBA.rgbReserved shl 0;
+                 Dest16bitPixel:=DestRGBA.rgbRed shl shiftR or DestRGBA.rgbGreen shl shiftG or DestRGBA.rgbBlue shl shiftB or DestRGBA.rgbReserved shl alpha_sh;
                  //Dest16bitPixel:=65535; {all white test}
                  //Dest16bitPixel:=65520; {all white test 0 alpha}
                  bitstream.Write(Dest16bitPixel, sizeof(word));
@@ -487,7 +515,7 @@ begin
         end;
 
 
-     if ( (bits = 16) and ( (BMPFormat = bf16bitA1555) or (BMPFormat = bf16bit565) ) )then
+     if ( (bits = 16) and ( (BMPFormat = bf16bitA1555) or (BMPFormat = bf16bit565) or (FEmissive and (BMPFormat = bf16bitX1555)) ) )then
         begin
           for h := 0 to bmap.Height - 1 do
             begin
@@ -693,6 +721,7 @@ var
   i,n,mipX,mipY:integer;
 begin
     result:= TBMPARRAY.Create;
+    FEmissive:=False;
     tempBMP:=TBitmap.Create;
     AssignFile(f, filename);
 
@@ -778,8 +807,8 @@ begin
             result.SetCMP:=self.CMPData;
 
             result.isTransparent:=self.isTransparent;
-            result.transparentColorValue:=self.transparentColorValue;
-
+            //result.transparentColorValue:=self.transparentColorValue;
+             result.transparentColorValue:=matTextureHeaderA[0].transparent_color;   //26-SEP-2026
             mipX:= matMipmapHeaderA[i].SizeX;
             mipY:= matMipmapHeaderA[i].SizeY;
 
@@ -812,6 +841,8 @@ begin
        INDEXCMP:result.fmt:='8-bit INDEXED int CMP';
        INDEXTCMP:result.fmt:='8-bit INDEXED trans int CMP';
       end;
+      if FEmissive and ((matformat = ARGB1555) or (matformat = RGBA4444) or (matformat = RGBA5551)) then
+        result.fmt:=result.fmt+' emissive';
 
  {$IFDEF DEBUG}
      bmap.SaveToFile('D:\TestBMP\lastcell.bmp');
@@ -824,6 +855,7 @@ end;
 function TMAT.StrToFormat(str:string):TFORMAT;
  begin
      result:= TFORMAT.BMP;
+     str := StringReplace(str, ' emissive', '', [rfIgnoreCase]);
 
     // str:='16-bit RGB565';
 
@@ -866,6 +898,7 @@ var
   src:   word;
   cmp:TCMPPal;
   sl: PUInt64;
+  sR,sG,sB,sA: integer;
 //  Bsrc:byte;
 //  IndexArray: PByteArray;
 begin
@@ -893,6 +926,14 @@ begin
    bmap.Transparent:=true;
    end;
 
+   {emissive ARGB1555 (flag 2): same pixels, but the alpha bit is a glow mask, not transparency}
+   if (matMipmapHeaderA[0].TransparentBool = 2) and (matFormatHeader.alpha_bpp = 1) and (matFormatHeader.greenbits = 5) then
+   begin
+   matformat:=TFormat.ARGB1555;
+   bmap.PixelFormat := pf15bit;
+   FEmissive:=True;
+   end;
+
     for i := 0 to bmap.Height - 1 do
       BlockRead(f, bmap.Scanline[i]^, bmap.Width * 2);
    end;
@@ -902,6 +943,12 @@ begin
     if (matFormatHeader.bits = 16) and (matFormatHeader.ColorMode = 2) and (matFormatHeader.alpha_bpp = 1)   then
    begin
    matformat:=TFormat.RGBA5551;
+   if matMipmapHeaderA[0].TransparentBool = 2 then FEmissive:=True;
+   sR:=11; sG:=6; sB:=1; sA:=0;
+   if matFormatHeader.alpha_sh <> 0 then  {ARGB layout, e.g. alpha in bit 15}
+     begin
+     sR:=matFormatHeader.shiftR; sG:=matFormatHeader.shiftG; sB:=matFormatHeader.shiftB; sA:=matFormatHeader.alpha_sh;
+     end;
    bmap.PixelFormat := pf32bit;
    bmap.HandleType :=  bmDIB;
    bmap.Alphaformat := afDefined;
@@ -911,10 +958,10 @@ begin
       for i := 0 to bmap.Width - 1 do
       begin
         BlockRead(f, src, sizeof(src));
-        inrow[i].rgbRed := ((src and $F800) shr 11) shl 3;
-        inrow[i].rgbGreen := ((src and $7C0) shr 6) shl 3;
-        inrow[i].rgbBlue := ((src and $3E) shr 1) shl 3;
-        inrow[i].rgbReserved := ((src and $1) shr 0) * 255;
+        inrow[i].rgbRed := ((src shr sR) and 31) shl 3;
+        inrow[i].rgbGreen := ((src shr sG) and 31) shl 3;
+        inrow[i].rgbBlue := ((src shr sB) and 31) shl 3;
+        inrow[i].rgbReserved := ((src shr sA) and 1) * 255;
       end;
 
     end;
@@ -927,6 +974,12 @@ begin
    if (matFormatHeader.bits = 16) and (matFormatHeader.ColorMode = 2) and (matFormatHeader.alpha_bpp = 4)   then
    begin
    matformat:=TFormat.RGBA4444;
+   if matMipmapHeaderA[0].TransparentBool = 2 then FEmissive:=True;
+   sR:=12; sG:=8; sB:=4; sA:=0;
+   if matFormatHeader.alpha_sh <> 0 then  {ARGB layout, e.g. alpha in bits 12..15}
+     begin
+     sR:=matFormatHeader.shiftR; sG:=matFormatHeader.shiftG; sB:=matFormatHeader.shiftB; sA:=matFormatHeader.alpha_sh;
+     end;
    bmap.PixelFormat := pf32bit;
    bmap.HandleType :=  bmDIB;
    bmap.Alphaformat := afIgnored;  {setting as defined seems to cause pre multiplication after conversion}
@@ -936,10 +989,10 @@ begin
       for i := 0 to bmap.Width - 1 do
       begin
         BlockRead(f, src, sizeof(src));
-        inrow^[i].rgbRed := ((src and 61440) shr 12) * 17;
-        inrow^[i].rgbGreen := ((src and 3840) shr 8) * 17;
-        inrow^[i].rgbBlue := ((src and 240) shr 4) * 17;
-        inrow^[i].rgbReserved := ((src and 15) shr 0) * 17;
+        inrow^[i].rgbRed := ((src shr sR) and 15) * 17;
+        inrow^[i].rgbGreen := ((src shr sG) and 15) * 17;
+        inrow^[i].rgbBlue := ((src shr sB) and 15) * 17;
+        inrow^[i].rgbReserved := ((src shr sA) and 15) * 17;
 
 //        inrow[i].rgbRed := ((src and 61440) shr 12) shl 4;
 //        inrow[i].rgbGreen := ((src and 3840) shr 8) shl 4;

@@ -142,6 +142,11 @@ type
     procedure Createnewmatfrombmps1Click(Sender: TObject);
     procedure EditMTS1Click(Sender: TObject);
     procedure Browsematsinfolder1Click(Sender: TObject);
+  private
+    BatchConvertBMPsTo565Item: TMenuItem; {created in FormCreate}
+    MatHeaderEditorItem: TMenuItem;     {created in FormCreate}
+    procedure BatchConvertBMPsTo565Click(Sender: TObject);
+    procedure MatHeaderEditorClick(Sender: TObject);
   end;
 
 var
@@ -159,7 +164,7 @@ var
   CMPOffsets: TFileOffsets;
 implementation
 
-uses about_unit, Batch,
+uses about_unit, Batch, MatHeaderForm,
    gobform, ViewtileUnit, mess_frm,options, EditMat,EditMTS,GloabalVars;
 
 {$R *.DFM}
@@ -197,6 +202,8 @@ procedure TMainForm.BMPArrayDisplay(BMPA:TBMPArray; Mat:TMAT);
 var
 tempBMP:TBitmap;
 MatInfoList:Tstringlist;
+glowBMP:TBitmap;
+emis:Boolean;
  //gridBMP:tbitmap;
 begin
   Cell_TrackBar.Position := 0;
@@ -208,7 +215,19 @@ begin
   BMPArray.Assign(BMPA);
     tempBMP:=(BMPArray.GetCell(0));
 
-    if (Mat.GetMatFormat=(TFormat.RGBA4444)) or (Mat.GetMatFormat=(TFormat.RGBA5551)) or (Mat.GetMatFormat=(TFormat.RGBA8888)) then
+    {emissive mats: show the cell as it looks in the dark, the alpha channel (glow) brightens it}
+    emis := IsEmissiveFmt(BMPA.fmt);
+    if emis then
+    begin
+      glowBMP := BuildGlowPreview(tempBMP);
+      try
+        Image1.Picture.Bitmap.Assign(glowBMP);
+      finally
+        glowBMP.Free;
+      end;
+    end;
+
+    if (not emis) and ((Mat.GetMatFormat=(TFormat.RGBA4444)) or (Mat.GetMatFormat=(TFormat.RGBA5551)) or (Mat.GetMatFormat=(TFormat.RGBA8888))) then
     begin
     PremultiplyAlpha(tempBMP);
     Draw32bitImageOnGrid(tempBMP);
@@ -223,7 +242,7 @@ begin
     end;
      end;
 
-  if Mat.GetMatFormat=(TFormat.ARGB1555) then
+  if (not emis) and (Mat.GetMatFormat=(TFormat.ARGB1555)) then
     begin
     Draw16bitImageOnGrid(tempBMP);
     if tempBMP.PixelFormat =pf8bit then
@@ -350,10 +369,24 @@ end;
 procedure TMainForm.TrackBarChange;
  var
 tmpBMP:Tbitmap;
+glowBMP:Tbitmap;
 begin
  if BMPArray.GetCellCount <> 0 then
  begin
    tmpBMP:=(BMPArray.GetBMP(Cell_TrackBar.Position,Mip_TrackBar.Position));
+
+   if IsEmissiveFmt(BMPArray.fmt) then
+     begin
+      glowBMP := BuildGlowPreview(tmpBMP);
+      try
+        image1.picture.Bitmap.Assign(glowBMP);
+      finally
+        glowBMP.Free;
+      end;
+      bitmap.Assign(tmpBMP);   {raw cell, used by the pixel readout}
+      tmpBMP.Free;
+      exit;
+     end;
 
    if (tmpBMP.PixelFormat = pf32bit)  then
        begin
@@ -403,6 +436,7 @@ procedure TMainForm.FileSaveAs(Sender: TObject);
  var
 Mat: TMAT;
 MatName:string;
+rawBMP:TBitmap;
 begin
   Screen.Cursor := crHourGlass;
   SaveDialog.FileName := ChangeExt(OpenDialog.FileName, '');
@@ -418,7 +452,18 @@ begin
 
     if UpperCase(ExtractFileExt(SaveDialog.FileName)) = '.BMP' then
     begin
-      image1.picture.bitmap.SaveToFile(SaveDialog.FileName);
+      if IsEmissiveFmt(BMPArray.fmt) then
+      begin
+        {save the raw cell with its glow alpha, not the darkened preview}
+        rawBMP := BMPArray.GetBMP(Cell_TrackBar.Position,Mip_TrackBar.Position);
+        try
+          BMP_Save(rawBMP, SaveDialog.FileName);
+        finally
+          rawBMP.Free;
+        end;
+      end
+      else
+        image1.picture.bitmap.SaveToFile(SaveDialog.FileName);
     end;
 
     if UpperCase(ExtractFileExt(SaveDialog.FileName)) = '.MAT16S' then
@@ -524,7 +569,7 @@ begin
 
    end;
 
-   if Image1.Picture.Bitmap.PixelFormat = pfCustom then
+   if (Image1.Picture.Bitmap.PixelFormat = pfCustom) or ((imageformat = TFormat.ARGB1555) and IsEmissiveFmt(BMPArray.fmt)) then
     begin
       TargetColor := bitmap.Canvas.Pixels[scaledX, scaledY];
       Shape1.Brush.Color := TargetColor;
@@ -722,6 +767,109 @@ Screen.Cursor := crHourGlass;
   Screen.Cursor := crDefault;
 end;
 
+{ Batch converts 8/16/24/32-bit bmps to 16-bit RGB565 mats (no mip-maps), saved next to each bmp }
+procedure TMainForm.BatchConvertBMPsTo565Click(Sender: TObject);
+var
+  i, nOK, nFail, nSkip, nExist: Integer;
+  src, bmp565: TBitmap;
+  A: TBMPArray;
+  Mat: TMAT;
+  srcName, saveName: string;
+  overwrite: Boolean;
+begin
+  OpenDialogBatch.Filter := 'bmp files (*.bmp)|*.bmp';
+  OpenDialogBatch.FilterIndex := 1;
+  OpenDialogBatch.Options := OpenDialogBatch.Options + [ofAllowMultiSelect];
+  if not OpenDialogBatch.Execute then
+    exit;
+
+  nExist := 0;
+  for i := 0 to OpenDialogBatch.Files.Count - 1 do
+    if FileExists(ChangeFileExt(OpenDialogBatch.Files[i], '.mat')) then
+      Inc(nExist);
+
+  overwrite := True;
+  if nExist > 0 then
+    overwrite := MessageDlg(IntToStr(nExist) + ' of the selected bitmaps already have a .mat file.' +
+                 sLineBreak + sLineBreak + 'Overwrite them?  (No skips those files)',
+                 mtConfirmation, [mbYes, mbNo], 0) = mrYes;
+
+  nOK := 0; nFail := 0; nSkip := 0;
+  Screen.Cursor := crHourGlass;
+  try
+    BatchForm.Memo1.Lines.Clear;
+    BatchForm.Memo1.Lines.Add(IntToStr(OpenDialogBatch.Files.Count) +
+      ' File(s) selected to convert to 16-bit RGB565 mat');
+    BatchForm.ProgressBar1.Position := 0;
+    BatchForm.ProgressBar1.Max := OpenDialogBatch.Files.Count;
+    BatchForm.Show;
+
+    for i := 0 to OpenDialogBatch.Files.Count - 1 do
+    begin
+      srcName  := OpenDialogBatch.Files[i];
+      saveName := ChangeFileExt(srcName, '.mat');
+      BatchForm.ProgressBar1.Position := i + 1;
+      Application.ProcessMessages;
+
+      if UpperCase(ExtractFileExt(srcName)) <> '.BMP' then
+        Continue;
+
+      if FileExists(saveName) and (not overwrite) then
+      begin
+        BatchForm.Memo1.Lines.Add('Skipped (mat exists): ' + ExtractFileName(saveName));
+        Inc(nSkip);
+        Continue;
+      end;
+
+      src := nil; bmp565 := nil; A := nil; Mat := nil;
+      try
+        try
+          src := BMP_Open(srcName);
+
+          case inputBMPFormat of
+            bf16bit565:
+              begin
+                bmp565 := src;   {already 565, use as is}
+                src := nil;
+              end;
+            bf8bit, bf24bit, bf32bit, bf16bitA444, bf16bitX444, bf16bitA1555, bf16bitX1555:
+              bmp565 := ConvertToRGB565(src);  {handles paletted, 1555 and 4444 (loaded as 32-bit) too}
+          else
+            raise Exception.Create('unsupported bitmap format (' + BMPFMTtoStr(inputBMPFormat) + ')');
+          end;
+
+          A := TBMPArray.Create;
+          A.AddCellFromBMP(bmp565);
+          A.fmt := '16-bit RGB565';
+          A.transparentColorValue := CalcSolidColorIndex(A);  {solid color = closest CMP index to the average color}
+          Mat := TMAT.CreateFromBMPArray(A);
+          Mat.SaveMat(saveName);
+
+          BatchForm.Memo1.Lines.Add('Saved ' + ExtractFileName(saveName) +
+            ' (solid color index ' + IntToStr(A.transparentColorValue) + ')');
+          Inc(nOK);
+        except
+          on E: Exception do
+          begin
+            BatchForm.Memo1.Lines.Add('FAILED ' + ExtractFileName(srcName) + ': ' + E.Message);
+            Inc(nFail);
+          end;
+        end;
+      finally
+        Mat.Free;
+        A.Free;
+        bmp565.Free;
+        src.Free;
+      end;
+    end;
+
+    BatchForm.Memo1.Lines.Add('-Done- ' + IntToStr(nOK) + ' saved, ' +
+      IntToStr(nSkip) + ' skipped, ' + IntToStr(nFail) + ' failed');
+  finally
+    Screen.Cursor := crDefault;
+  end;
+end;
+
 procedure TMainForm.BatchConvertMATBMP1Click(Sender: TObject);
 var
   i,j,k: integer;
@@ -880,8 +1028,13 @@ begin
 end;
 
 procedure TMainForm.Draw16bitImageOnGrid(bmp:Tbitmap);
+type
+  TWordRow = array[0..32767] of Word;
+  PWordRow = ^TWordRow;
 var
 gridBMP,remap:tbitmap;
+x,y:integer;
+srcRow,dstRow:PWordRow;
 begin
  gridBMP:=Tbitmap.create;
  if bmp.PixelFormat = pfCustom then
@@ -891,7 +1044,21 @@ begin
  gridBMP.HandleType :=  bmDIB;
  try
  RenderGrid(gridBMP,bmp.Height,bmp.Width,4,clGray,clLtGray);
- TransBlt(gridBMP,bmp,BMPArray.transparentColorValue);
+ if (bmp.PixelFormat = pfCustom) or (bmp.PixelFormat = pf15bit) then
+  begin
+   {1555: only a word of 0 (black with the alpha bit clear) is transparent, so an opaque black pixel
+    (alpha bit set) is drawn as black}
+   for y := 0 to bmp.Height - 1 do
+    begin
+     srcRow := bmp.ScanLine[y];
+     dstRow := gridBMP.ScanLine[y];
+     for x := 0 to bmp.Width - 1 do
+       if srcRow^[x] <> 0 then
+         dstRow^[x] := srcRow^[x];
+    end;
+  end
+ else
+  TransBlt(gridBMP,bmp,BMPArray.transparentColorValue);
  Image1.Picture.Bitmap.Assign(gridBMP);
  image1.Repaint;
  finally
@@ -986,6 +1153,11 @@ begin
 
 end;
 
+procedure TMainForm.MatHeaderEditorClick(Sender: TObject);
+begin
+  ShowMatHeaderEditor;
+end;
+
 procedure TMainForm.FormCreate(Sender: TObject);
 var
  // i:  integer;
@@ -1009,6 +1181,18 @@ begin
 
 
   isbatch := False;
+
+  {File menu: batch convert bmps to 16-bit 565 mats (added in code, right after the mat16s batch item)}
+  BatchConvertBMPsTo565Item := TMenuItem.Create(Self);
+  BatchConvertBMPsTo565Item.Caption := 'Batch Convert (bmp''s to 16-bit 565 mat)';
+  BatchConvertBMPsTo565Item.OnClick := BatchConvertBMPsTo565Click;
+  BatchConvertBMPs1.Parent.Insert(BatchConvertBMPs1.MenuIndex + 1, BatchConvertBMPsTo565Item);
+
+ {Tools menu: MAT header editor (added in code)}
+  MatHeaderEditorItem := TMenuItem.Create(Self);
+  MatHeaderEditorItem.Caption := 'MAT &Header Editor...';
+  MatHeaderEditorItem.OnClick := MatHeaderEditorClick;
+  Tools1.Add(MatHeaderEditorItem);
 
  JKPath:= Optionsform.GetContainerPath;
   updateCMPcomboBox(JKPath);
@@ -1162,6 +1346,7 @@ begin
 
   image1.Transparent := False;
   VIewasTransparent1.Checked := False;
+  OpenDialog1.Filter := 'gob/goo/baf/cnd/b3d/sote dll/exe|*.gob;*.goo;*.baf;*.cnd;*.b3d;*.dll;*.exe';
   if OpenDialog1.Execute then
   begin
     //Screen.Cursor := crHourGlass;
@@ -1176,6 +1361,27 @@ begin
     if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.GOO' then
     begin
       gobview.opengob(OpenDialog1.FileName);
+      gobview.Show;
+      gobview.Label_FileName.Caption := OpenDialog1.Filename;
+    end;
+
+    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.CND' then
+    begin
+      gobview.opencnd(OpenDialog1.FileName);
+      gobview.Show;
+      gobview.Label_FileName.Caption := OpenDialog1.Filename;
+    end;
+
+    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.B3D' then
+    begin
+      gobview.openb3d(OpenDialog1.FileName);
+      gobview.Show;
+      gobview.Label_FileName.Caption := OpenDialog1.Filename;
+    end;
+
+    if (UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.DLL') or (UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.EXE') then
+    begin
+      gobview.opensote(OpenDialog1.FileName);
       gobview.Show;
       gobview.Label_FileName.Caption := OpenDialog1.Filename;
     end;

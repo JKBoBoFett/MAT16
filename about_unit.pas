@@ -22,6 +22,10 @@ type
     Label10:     TLabel;
     Label11:     TLabel;
     Label5:      TLabel;
+    Image2: TImage;
+
+  protected
+    procedure Loaded; override;
   private
     { Private declarations }
   public
@@ -34,5 +38,13 @@ var
 implementation
 
 {$R *.DFM}
+
+
+
+Procedure TAboutBox.Loaded;
+begin
+  inherited;
+  Version.Caption := 'Version 1.4.4';
+end;
 
 end.

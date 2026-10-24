@@ -522,7 +522,7 @@ Result.SetSize(Abitmap.width,Abitmap.height);
 
 
    // Result.Assign(Abitmap);
-    result.SaveToFile('D:\TestBMP\ddither.bmp');
+  //  result.SaveToFile('D:\TestBMP\ddither.bmp');
 end;
 
 function Conv24bitTo16(ABitmap:tbitmap;RedBitDiff,GreenBitDiff,BlueBitDiff:integer):Tbitmap;
@@ -913,8 +913,9 @@ begin
     Abitmap.SaveToFile(filename);
     end;
 
-    if BMPFormat = bf16bitA1555 then
+    if (BMPFormat = bf16bitA1555) or (BMPFormat = bf16bitX1555) then
     begin
+     {X1555 = no alpha bit set anywhere, e.g. an emissive cell without glow, still has to be saved}
      Save16bitA1555BMP(Abitmap, filename);
     end;
 

@@ -32,7 +32,7 @@ type
       GreenBitDif: longint;         // bits shifted right during conversion from 8bit to 6bit =2 {ignored by game engine}
       BlueBitDif: longint;          // bits shifted right during conversion from 8bit to 5bit =3 {ignored by game engine}
 
-      alpha_bpp:longint;            //  {ignored by game engine}
+      alpha_bpp:longint;            //  {ignored by JK game engine?}  the engine picks which of these three constants to use via std3D_GetColorFormat(), which only looks at alphaBPP (0 ? RGB565, 1 ? RGB5551, 4 ? RGB4444)
       alpha_sh:longint;             //  shift left during conversion {ignored by game engine}
       alpha_BitDif:longint;         //  shifted right during conversion {ignored by game engine}
     end;
@@ -42,18 +42,18 @@ type
     TColorHeader = record
       textype:longint;                 // {0 = color, 8= texture}
       colornum:longint;                // {Color index from the CMP palette}
-      pads:array[0..3] of longint;     // {each = 0x3F800000 (check cmp header )}
+      pads:array[0..3] of longint;     // {each = 0x3F800000 (check cmp header )}   hex value is the IEEE-754 float 1.0
     end;
 
     TTextureHeader = record
       textype: longint;                   // {8= texture}
-      transparent_color : longint;        // {With 8-bit images, is an index into the palette. .}
+      transparent_color : longint;        // {With 8-bit images, is an index into the palette. .(sets the solid color value 'geo mode 3') }
       pads: array[0..2] of longint;
       unk1tha: word;                      // {ignored by game engine}
       unk1thb: word;
-      unk2th: longint;                    //=0
-      unk3th: longint;                    //=4  {ignored by game engine}
-      unk4th: longint;                    //=4  {ignored by game engine}
+      unk2th: longint;                    //=0  dTexinfoExtHeader.unk_00 — read into texinfo_alloc->texext_unk00,  //   then NEVER read again anywhere (only other reference in the whole  //   codebase is a debug stub that zero-initializes it)
+      unk3th: longint;                    //=4  {ignored by game engine}  = rdTexinfoExtHeader's 2nd field — OpenJKDF2 names it "height"    //   structurally, but it's read into a LOCAL struct and discarded  //   immediately, never copied anywhere or used — treat the name as   //   an unconfirmed guess, not behavior
+      unk4th: longint;                    //=4  {ignored by game engine}  OpenJKDF2 names it //   "alpha_en" by position but it's also read-and-discarded, unused
       cel_idx: longint;                   //=0 for first texture. Inc. for every texture in mat
     end;
 

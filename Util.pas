@@ -17,7 +17,78 @@ procedure TransBlt(dst,src:Tbitmap; color:longint);
 function IsBMPPowerOfTwo(x,y: integer): boolean;
 function IsBMPmipsOK(Abitmap:tbitmap): boolean;
 procedure PremultiplyAlpha(bmp:Tbitmap);
+{emissive formats are stored as normal format strings plus the word 'emissive',
+ e.g. '16-bit RGBA4444 emissive'}
+function IsEmissiveFmt(const fmt: string): Boolean;
+{24-bit preview of an emissive cell: colour as seen in the dark, the alpha channel (glow mask)
+ brings it back to full brightness.  Accepts 32-bit RGBA and 15-bit ARGB1555 bitmaps.}
+function BuildGlowPreview(Src: TBitmap): TBitmap;
 implementation
+
+function IsEmissiveFmt(const fmt: string): Boolean;
+begin
+  Result := Pos('emissive', LowerCase(fmt)) > 0;
+end;
+
+function BuildGlowPreview(Src: TBitmap): TBitmap;
+type
+  TGlowByteRow = array[0..262143] of Byte;
+  PGlowByteRow = ^TGlowByteRow;
+  TGlowWordRow = array[0..65535] of Word;
+  PGlowWordRow = ^TGlowWordRow;
+var
+  x, y, r, g, b, m, k: Integer;
+  bp, dp: PGlowByteRow;
+  wp: PGlowWordRow;
+  w: Word;
+begin
+  Result := TBitmap.Create;
+  Result.PixelFormat := pf24bit;
+  Result.SetSize(Src.Width, Src.Height);
+
+  if (Src.PixelFormat <> pf32bit) and (Src.PixelFormat <> pf15bit) and (Src.PixelFormat <> pfCustom) then
+  begin
+    Result.Canvas.Draw(0, 0, Src);   {no glow mask available}
+    exit;
+  end;
+
+  for y := 0 to Src.Height - 1 do
+  begin
+    dp := Result.ScanLine[y];
+    if Src.PixelFormat = pf32bit then
+    begin
+      bp := Src.ScanLine[y];
+      for x := 0 to Src.Width - 1 do
+      begin
+        b := bp^[x * 4];
+        g := bp^[x * 4 + 1];
+        r := bp^[x * 4 + 2];
+        m := bp^[x * 4 + 3];
+        k := 77 + (m * 178) div 255;      {about 30% brightness unlit, 100% fully glowing}
+        dp^[x * 3]     := (b * k) div 255;
+        dp^[x * 3 + 1] := (g * k) div 255;
+        dp^[x * 3 + 2] := (r * k) div 255;
+      end;
+    end
+    else
+    begin
+      wp := Src.ScanLine[y];
+      for x := 0 to Src.Width - 1 do
+      begin
+        w := wp^[x];
+        b := (w and 31) * 255 div 31;
+        g := ((w shr 5) and 31) * 255 div 31;
+        r := ((w shr 10) and 31) * 255 div 31;
+        if (w and $8000) <> 0 then m := 255 else m := 0;
+        k := 77 + (m * 178) div 255;
+        dp^[x * 3]     := (b * k) div 255;
+        dp^[x * 3 + 1] := (g * k) div 255;
+        dp^[x * 3 + 2] := (r * k) div 255;
+      end;
+    end;
+  end;
+end;
+
 
 function ExtractName(path: string): string;
 var

@@ -34,7 +34,9 @@ uses
   Set8bitFormatOnOpen in 'Set8bitFormatOnOpen.pas' {Set8bitFormatForm},
   EditMat in 'EditMat.pas' {EditMatForm},
   BMP_IO in 'BMP_IO.pas',
-  GloabalVars in 'GloabalVars.pas';
+  GloabalVars in 'GloabalVars.pas',
+  MatFormat in 'MatFormat.pas',
+  MatHeaderForm in 'MatHeaderForm.pas';
 
 // MemCheck;
 {$R *.RES}
