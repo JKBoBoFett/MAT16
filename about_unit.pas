@@ -44,7 +44,7 @@ implementation
 Procedure TAboutBox.Loaded;
 begin
   inherited;
-  Version.Caption := 'Version 1.4.4';
+  Version.Caption := 'Version 1.4.5';
 end;
 
 end.

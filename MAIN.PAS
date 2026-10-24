@@ -145,6 +145,26 @@ type
   private
     BatchConvertBMPsTo565Item: TMenuItem; {created in FormCreate}
     MatHeaderEditorItem: TMenuItem;     {created in FormCreate}
+    FLightLevel: Integer;               {light level kept while the program runs (63 at start)}
+    FZoomFactor: Double;                {zoom kept between images}
+    EmissiveSearchItem: TMenuItem;      {created in FormCreate}
+    AutoPaletteItem: TMenuItem;         {Tools: pick the colour map automatically}
+    FAutoPalNote: string;               {shown in the status bar after the load time}
+    FCandNames: TStringList;            {candidate colour maps (names + palettes)}
+    FCandPals: array of TCMPPal;
+    FCandOffsets: TFileOffsets;         {CMPOffsets the cache was built from}
+    adpMRUContainer: TadpMRU;           {recent containers}
+    adpMRUFolder: TadpMRU;              {recent folders of the folder view}
+    RecentFolderItem: TMenuItem;
+    RecentContainerItem: TMenuItem;     {created in FormCreate}
+    procedure OpenFolderView(const dir: string);
+    procedure adpMRUFolderClick(Sender: TObject; const Filename: String);
+    procedure AutoPaletteClick(Sender: TObject);
+    procedure BuildPaletteCandidates;
+    procedure AutoPickPalette(const filename: string);
+    procedure OpenContainer(const FileName: string);
+    procedure adpMRUContainerClick(Sender: TObject; const Filename: String);
+    procedure EmissiveSearchClick(Sender: TObject);
     procedure BatchConvertBMPsTo565Click(Sender: TObject);
     procedure MatHeaderEditorClick(Sender: TObject);
   end;
@@ -164,7 +184,7 @@ var
   CMPOffsets: TFileOffsets;
 implementation
 
-uses about_unit, Batch, MatHeaderForm,
+uses about_unit, Batch, MatHeaderForm, MatSearch, AutoPalette,
    gobform, ViewtileUnit, mess_frm,options, EditMat,EditMTS,GloabalVars;
 
 {$R *.DFM}
@@ -181,6 +201,189 @@ begin
 end;
 
 
+procedure TMainForm.AutoPaletteClick(Sender: TObject);
+var
+  reg: TRegistry;
+begin
+  AutoPaletteItem.Checked := not AutoPaletteItem.Checked;
+  AutoPaletteEnabled := AutoPaletteItem.Checked;
+  reg := TRegistry.Create;
+  try
+    if reg.OpenKey('\Software\Jedi Dreams\Mat16', True) then
+      reg.WriteBool('AutoPalette', AutoPaletteItem.Checked);
+  finally
+    reg.Free;
+  end;
+end;
+
+{loads every colour map of the current CMP source once so mats can be tried against all of them}
+procedure TMainForm.BuildPaletteCandidates;
+var
+  i, n: Integer;
+  cmp: TCMP;
+begin
+  if (FCandNames <> nil) and (Length(FCandOffsets) = Length(CMPOffsets)) and (Length(CMPOffsets) > 0) then
+    if (Length(CMPOffsets) = 0) or (FCandOffsets[0].container = CMPOffsets[0].container) then Exit;
+  if FCandNames = nil then FCandNames := TStringList.Create;
+  FCandNames.Clear;
+  SetLength(FCandPals, 0);
+  FCandOffsets := CMPOffsets;
+  n := 0;
+  cmp := TCMP.Create;
+  try
+    for i := 0 to High(CMPOffsets) do
+    begin
+      try
+        cmp.LoadCMPFromFile(CMPOffsets[i].container, CMPOffsets[i].offset);
+        SetLength(FCandPals, n + 1);
+        FCandPals[n] := cmp.GetRGB;
+        FCandNames.Add(CMPOffsets[i].filename);
+        Inc(n);
+      except
+      end;
+    end;
+  finally
+    cmp.Free;
+  end;
+end;
+
+{a wrong colour map shows as lots of magenta: when that happens try the other colour maps
+ (those of the game resources plus any .cmp next to the mat) and keep the best one}
+procedure TMainForm.AutoPickPalette(const filename: string);
+var
+  px: TBytes;
+  w, h, i, best, k: Integer;
+  trans: Boolean;
+  curMag, curScore, mag, sc, bestScore, bestMag: Double;
+  cmp: TCMP;
+  files: TArray<string>;
+  bestName: string;
+  bestPal: TCMPPal;
+  bestFile: string;
+  cidx: Integer;
+  fromList: Boolean;
+  prefix, nm: string;
+  pIdx, c: Integer;
+  usedPrefix, curOK: Boolean;
+  pMag, pSc: Double;
+begin
+  FAutoPalNote := '';
+  bestFile := '';
+  if (AutoPaletteItem = nil) or (not AutoPaletteItem.Checked) then Exit;
+  if not ReadMatIndices(filename, w, h, trans, px) then Exit;
+
+  ScorePalette(px, w, h, trans, MainCMP.GetBaseRGB, curMag, curScore);
+  usedPrefix := False;
+  prefix := '';
+  nm := ExtractFileName(filename);
+  c := 1;
+  while (c <= Length(nm)) and CharInSet(nm[c], ['0'..'9']) do
+  begin
+    prefix := prefix + nm[c];
+    Inc(c);
+  end;
+  {the palette already in use is fine when it has little magenta and, for a stock level
+   texture, is also the colour map of that level}
+  curOK := (prefix = '') or StartsText(prefix, ExtractFileName(StringReplace(ComboBox1.Text, '/', '\', [rfReplaceAll])));
+  if (curMag < 0.02) and curOK then Exit;
+
+  BuildPaletteCandidates;
+  bestScore := curScore;
+  bestMag := curMag;
+  best := -1;
+  for i := 0 to High(FCandPals) do
+  begin
+    ScorePalette(px, w, h, trans, FCandPals[i], mag, sc);
+    if sc < bestScore then
+    begin
+      bestScore := sc;
+      bestMag := mag;
+      best := i;
+    end;
+  end;
+
+  {stock levels name mats and colour maps with the same level prefix (19tstn.mat -> 19xxxx.cmp):
+   when such a map is about as good as the best one, prefer it}
+  if prefix <> '' then
+  begin
+    pIdx := -1;
+    for i := 0 to High(FCandPals) do
+      if StartsText(prefix, ExtractFileName(StringReplace(FCandNames[i], '/', '\', [rfReplaceAll]))) then
+      begin
+        ScorePalette(px, w, h, trans, FCandPals[i], pMag, pSc);
+        if (pMag <= curMag + 0.01) and (pMag <= bestMag + 0.01) and ((pIdx < 0) or (pSc < bestScore)) then
+        begin
+          pIdx := i;
+          bestScore := pSc;
+          bestMag := pMag;
+        end;
+      end;
+    if pIdx >= 0 then
+    begin
+      best := pIdx;
+      usedPrefix := True;
+    end;
+  end;
+
+  fromList := best >= 0;
+  if fromList then
+  begin
+    bestName := FCandNames[best];
+    bestPal := FCandPals[best];
+  end;
+
+  {colour maps stored beside the mat (custom levels)}
+  try
+    files := TDirectory.GetFiles(ExtractFilePath(filename), '*.cmp');
+  except
+    SetLength(files, 0);
+  end;
+  cmp := TCMP.Create;
+  try
+    for k := 0 to High(files) do
+    begin
+      try
+        cmp.LoadCMPFromFile(files[k], 0);
+        ScorePalette(px, w, h, trans, cmp.GetRGB, mag, sc);
+        if sc < bestScore then
+        begin
+          bestScore := sc;
+          bestMag := mag;
+          bestName := ExtractFileName(files[k]);
+          bestPal := cmp.GetRGB;
+          bestFile := files[k];
+          fromList := False;
+          best := -2;
+        end;
+      except
+      end;
+    end;
+  finally
+    cmp.Free;
+  end;
+
+  {only switch when it is clearly better}
+  if (best = -1) or ((not usedPrefix) and (bestMag > curMag * 0.5)) then Exit;
+
+  {load the colour map the same way the colour map drop down does (palette + light table)}
+  cidx := -1;
+  if fromList then cidx := ComboBox1.Items.IndexOf(bestName);
+  if (cidx >= 0) and (cidx <= High(CMPOffsets)) then
+  begin
+    MainCMP.LoadCMPFromFile(CMPOffsets[cidx].container, CMPOffsets[cidx].offset);
+    ComboBox1.ItemIndex := cidx;
+    SetLightLevel(FLightLevel);
+  end
+  else if (not fromList) and (bestFile <> '') then
+  begin
+    MainCMP.LoadCMPFromFile(bestFile, 0);
+    SetLightLevel(FLightLevel);
+  end
+  else
+    MainCMP.SetRGB(bestPal);
+  FAutoPalNote := ' - palette: ' + bestName + ' (auto)';
+end;
+
 procedure TmainForm.matopen(filename: string);
 var
   Mat: TMAT;
@@ -190,8 +393,10 @@ begin
   Cell_TrackBar.Position := 0;
   image1.Repaint;
 
+  AutoPickPalette(filename);
   Mat:=TMAT.Create(TFormat.BMP);
-  Mat.SetCMP(MainCMP.GetRGB);
+  {the mat must get the palette without the light level applied, otherwise the light gets applied twice}
+  Mat.SetCMP(MainCMP.GetBaseRGB);
   tempA:= Mat.LoadFromFile(filename);
 
   BMPArrayDisplay(tempA,Mat); //function frees resources
@@ -306,8 +511,10 @@ begin
 
 
 
-  Panel2.Width:=Image1.Picture.Bitmap.Width;
-  Panel2.Height:=Image1.Picture.Bitmap.Height;
+  if FLightLevel <> 63 then SetLightLevel(FLightLevel);   {keep the light level chosen earlier}
+  if FZoomFactor < 0.02 then FZoomFactor := 1;
+  Panel2.Width:=Round(Image1.Picture.Bitmap.Width * FZoomFactor);
+  Panel2.Height:=Round(Image1.Picture.Bitmap.Height * FZoomFactor);
   Label3.Caption:=Inttostr(BMPArray.GetCellCount);
   Label17.Caption:=Inttostr(BMPArray.GetMipCount);
 
@@ -329,12 +536,40 @@ begin
    tempBMP.Free;
 
 end;
- procedure TMainForm.Browsematsinfolder1Click(Sender: TObject);
+ procedure TMainForm.EmissiveSearchClick(Sender: TObject);
+begin
+  ShowMatSearch('',
+    procedure(const fn: string)
+    begin
+      OpenImage(fn);
+    end);
+end;
+
+procedure TMainForm.OpenFolderView(const dir: string);
+begin
+  gobview.openfolder(dir);
+  gobview.Show;
+  adpMRUFolder.AddItem(dir);
+end;
+
+procedure TMainForm.adpMRUFolderClick(Sender: TObject; const Filename: String);
+begin
+  if not TDirectory.Exists(Filename) then
+  begin
+    ShowMessage('Folder not found: ' + Filename);
+    Exit;
+  end;
+  image1.Transparent := False;
+  VIewasTransparent1.Checked := True;
+  OpenFolderView(Filename);
+end;
+
+procedure TMainForm.Browsematsinfolder1Click(Sender: TObject);
 begin
    //SaveAlphaChannel1.Enabled := False;
 //  optionsform.readoptions;
-  image1.Transparent := False;
-  VIewasTransparent1.Checked := False;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+  VIewasTransparent1.Checked := True;
   image1.Picture.Bitmap.Width := 32;
   image1.Picture.Bitmap.Height := 32;
   image1.Picture.Bitmap.Assign(nil);
@@ -342,18 +577,14 @@ begin
   // Cell_TrackBar.Visible:=False;
 
 
-  image1.Transparent := False;
-  VIewasTransparent1.Checked := False;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+  VIewasTransparent1.Checked := True;
 
   with TFileOpenDialog.Create(nil) do
   try
     Options := [fdoPickFolders];
     if Execute then
-      begin
-      //ShowMessage(FileName);
-       gobview.openfolder(FileName);
-       gobview.Show;
-      end;
+      OpenFolderView(FileName);
   finally
     Free;
   end;
@@ -423,7 +654,7 @@ procedure TMainForm.Mip_TrackBarChange(Sender: TObject);
 begin
  if label17.Caption <> '0'  then
   begin
-    SetLightLevel(63);
+    SetLightLevel(FLightLevel);
     Image1.Picture:=nil;
     TrackBarChange;
   end;
@@ -953,8 +1184,14 @@ end;
 
 
 procedure TMainForm.UpDown_LightLevelClick(Sender: TObject; Button: TUDBtnType);
+var
+  lvl: Integer;
 begin
- SetLightLevel(UpDown_LightLevel.Position);
+ {the control may not have moved its Position yet when this event fires, so step from our own value}
+ if Button = btNext then lvl := FLightLevel + 1 else lvl := FLightLevel - 1;
+ if lvl > 63 then lvl := 63;
+ if lvl < 0 then lvl := 0;
+ SetLightLevel(lvl);
 end;
 
 procedure TmainForm.SetLightLevel(level:integer);
@@ -964,16 +1201,20 @@ begin
 //   if ContainsText(BMPArray.fmt, 'CMP') then
 //   level:=63;
 
+   FLightLevel := level;
    edit_LightLevel.Text:=inttostr(level);
+   if UpDown_LightLevel.Position <> level then UpDown_LightLevel.Position := level;
 
   // if not ContainsText(BMPArray.fmt, 'CMP') then
  //  LightLevelRemap(level);
    MainCMP.LightLevelRemap(level);
 
- if bitmap.PixelFormat = pf8bit then
+ if (bitmap.PixelFormat = pf8bit) or StartsText('8-bit', BMPArray.fmt) then
    begin
    BMPArray.RemapArrayfromCMP(MainCMP);
    TrackBarChange;
+   image1.Invalidate;
+   image1.Repaint;
    end;
 
    gridPalette.Repaint;
@@ -997,25 +1238,55 @@ end;
 
 procedure TMainForm.Draw8bitImageOnGrid(bmp:Tbitmap);
 var
-gridBMP,remap:tbitmap;
+gridBMP:tbitmap;
+pe: array[0..255] of TPaletteEntry;
+x, y: Integer;
+srow: PByteArray;
+drow: PByteArray;
 begin
  gridBMP:=Tbitmap.create;
- if bmp.PixelFormat = pfCustom then
-  gridBMP.PixelFormat:=pf15bit
-  else
- gridBMP.PixelFormat:=pf8bit;
- gridBMP.HandleType :=  bmDIB;
  try
  Image1.Picture.Bitmap:=nil;
- RenderGrid(gridBMP,bmp.Height,bmp.Width,1,clGray,clLtGray);
-   //remap:=MainCMP.WriteCMPtoBMP(bmp);
+ if (bmp.PixelFormat = pf8bit) and (not ViewasTransparent1.Checked) then
+  begin
+   {transparency switched off: show index 0 as an ordinary colour}
+   gridBMP.Assign(bmp);
+  end
+ else if (bmp.PixelFormat = pf8bit) and (bmp.Palette <> 0) then
+  begin
+   {the game treats palette index 0 as the transparent pixel (the header colour is only the
+    'solid colour' used for distant mips), so key on the index and not on a colour}
+   gridBMP.PixelFormat:=pf24bit;
+   gridBMP.HandleType :=  bmDIB;
+   RenderGrid(gridBMP,bmp.Height,bmp.Width,1,clGray,clLtGray);
+   gridBMP.PixelFormat:=pf24bit;
+   GetPaletteEntries(bmp.Palette, 0, 256, pe);
+   for y := 0 to bmp.Height - 1 do
+    begin
+     srow := bmp.ScanLine[y];
+     drow := gridBMP.ScanLine[y];
+     for x := 0 to bmp.Width - 1 do
+      if srow^[x] <> 0 then
+       begin
+        drow^[x * 3]     := pe[srow^[x]].peBlue;
+        drow^[x * 3 + 1] := pe[srow^[x]].peGreen;
+        drow^[x * 3 + 2] := pe[srow^[x]].peRed;
+       end;
+    end;
+  end
+ else
+  begin
+   if bmp.PixelFormat = pfCustom then
+    gridBMP.PixelFormat:=pf15bit
+   else
+    gridBMP.PixelFormat:=pf8bit;
+   gridBMP.HandleType :=  bmDIB;
+   RenderGrid(gridBMP,bmp.Height,bmp.Width,1,clGray,clLtGray);
    TransBlt(gridBMP,bmp,BMPArray.transparentColorValue);
-   Image1.Picture.Bitmap.Assign(gridBMP);
-   image1.Repaint;
-
-
+  end;
+ Image1.Picture.Bitmap.Assign(gridBMP);
+ image1.Repaint;
  finally
- //remap.Free;
  gridBMP.Free;
  end;
 end;
@@ -1097,7 +1368,7 @@ Mip_TrackBar.Position:=0;
 
  if Cell_TrackBar.Max <> 0 then
   begin
-    SetLightLevel(63);
+    SetLightLevel(FLightLevel);
     Image1.Picture:=nil;
     TrackBarChange;
     image1.Repaint;
@@ -1169,6 +1440,7 @@ var
 
 
 begin
+   FLightLevel := 63;
    BMParray:=TBMPARRAY.Create;
    bitmap:=Tbitmap.create;
    MainCMP:=TCMP.create;
@@ -1179,6 +1451,26 @@ begin
   adpmru.RegistryPath:='\Software\Jedi Dreams\Mat16\mru';
   adpmru.MaxItems := 10;
 
+
+  {File menu: Open recent container (submenu kept in the registry like the recent files list)}
+  RecentContainerItem := TMenuItem.Create(Self);
+  RecentContainerItem.Caption := 'Open recent &container';
+  OpenGOBGOO1.Parent.Insert(OpenGOBGOO1.MenuIndex + 1, RecentContainerItem);
+  adpMRUContainer := TadpMRU.Create(mainform);
+  adpMRUContainer.ParentMenuItem := RecentContainerItem;
+  adpMRUContainer.OnClick := adpMRUContainerClick;
+  adpMRUContainer.RegistryPath := '\Software\Jedi Dreams\Mat16\mru_containers';
+  adpMRUContainer.MaxItems := 10;
+
+  {File menu: Open recent folder (for the folder view)}
+  RecentFolderItem := TMenuItem.Create(Self);
+  RecentFolderItem.Caption := 'Open recent &folder';
+  Browsematsinfolder1.Parent.Insert(Browsematsinfolder1.MenuIndex + 1, RecentFolderItem);
+  adpMRUFolder := TadpMRU.Create(mainform);
+  adpMRUFolder.ParentMenuItem := RecentFolderItem;
+  adpMRUFolder.OnClick := adpMRUFolderClick;
+  adpMRUFolder.RegistryPath := '\Software\Jedi Dreams\Mat16\mru_folders';
+  adpMRUFolder.MaxItems := 10;
 
   isbatch := False;
 
@@ -1193,6 +1485,55 @@ begin
   MatHeaderEditorItem.Caption := 'MAT &Header Editor...';
   MatHeaderEditorItem.OnClick := MatHeaderEditorClick;
   Tools1.Add(MatHeaderEditorItem);
+
+ {Tools menu: find mats by format, transparency flag, cells or palette colours}
+  EmissiveSearchItem := TMenuItem.Create(Self);
+  EmissiveSearchItem.Caption := 'Find &mats...';
+  EmissiveSearchItem.OnClick := EmissiveSearchClick;
+  Tools1.Add(EmissiveSearchItem);
+
+  FZoomFactor := 1;
+  {View as Transparent is on by default}
+  ViewasTransparent1.Checked := True;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+
+  {Tools menu: automatic colour map selection (remembered in the registry)}
+  AutoPaletteItem := TMenuItem.Create(Self);
+  AutoPaletteItem.Caption := 'Auto-select &palette';
+  AutoPaletteItem.OnClick := AutoPaletteClick;
+  AutoPaletteItem.Checked := True;
+  Tools1.Add(AutoPaletteItem);
+  with TRegistry.Create do
+  try
+    if OpenKeyReadOnly('\Software\Jedi Dreams\Mat16') and ValueExists('AutoPalette') then
+      AutoPaletteItem.Checked := ReadBool('AutoPalette');
+  finally
+    Free;
+  end;
+  AutoPaletteEnabled := AutoPaletteItem.Checked;
+  AutoPaletteHook := procedure(const fn: string)
+    begin
+      AutoPickPalette(fn);
+    end;
+
+  {standard keyboard shortcuts (set in code so the form file does not change)}
+  FileOpenItem.ShortCut            := ShortCut(Ord('O'), [ssCtrl]);
+  Createnewmatfrombmps1.ShortCut   := ShortCut(Ord('N'), [ssCtrl]);
+  FileSaveItem.ShortCut            := ShortCut(Ord('S'), [ssCtrl]);
+  SaveCMPas1.ShortCut              := ShortCut(Ord('S'), [ssCtrl, ssShift]);
+  Browsematsinfolder1.ShortCut     := ShortCut(Ord('O'), [ssCtrl, ssShift]);
+  OpenGOBGOO1.ShortCut             := ShortCut(Ord('G'), [ssCtrl]);
+  LoadColorMapCMP1.ShortCut        := ShortCut(Ord('L'), [ssCtrl]);
+  BatchConvertMATBMP1.ShortCut     := ShortCut(Ord('B'), [ssCtrl]);
+  BatchConvertBMPs1.ShortCut       := ShortCut(Ord('B'), [ssCtrl, ssShift]);
+  FileExitItem.ShortCut            := ShortCut(Ord('Q'), [ssCtrl]);
+  Options1.ShortCut                := ShortCut(Ord('P'), [ssCtrl]);
+  AddCell1.ShortCut                := ShortCut(Ord('E'), [ssCtrl]);
+  ViewasTransparent1.ShortCut      := ShortCut(Ord('T'), [ssCtrl]);
+  ViewMessages1.ShortCut           := ShortCut(Ord('M'), [ssCtrl]);
+  MatHeaderEditorItem.ShortCut     := ShortCut(Ord('H'), [ssCtrl]);
+  EmissiveSearchItem.ShortCut      := ShortCut(Ord('F'), [ssCtrl]);
+  HelpAboutItem.ShortCut           := ShortCut(VK_F1, []);
 
  JKPath:= Optionsform.GetContainerPath;
   updateCMPcomboBox(JKPath);
@@ -1283,7 +1624,7 @@ begin
       MainCMP.LoadCMPFromFile(OpenDialogcmp.FileName,0);
       //loadcmp(OpenDialogcmp.FileName,0);
       gridPalette.Repaint;
-       SetLightLevel(63);
+       SetLightLevel(FLightLevel);
    BMPArray.RemapArrayfromCMP(MainCMP);
   TrackBarChange;
 
@@ -1325,9 +1666,37 @@ begin
  // Edit_LightLevel.Text:='63';
  // UpDown_LightLevel.Position:=63;
  MainCMP.SetDefault;
- SetLightLevel(63);
+ SetLightLevel(FLightLevel);
   // UpDown_LightLevelClick;
   label17.Caption := '0';
+end;
+
+procedure TMainForm.OpenContainer(const FileName: string);
+var
+  ext: string;
+begin
+  ext := UpperCase(ExtractFileExt(FileName));
+  if (ext = '.GOB') or (ext = '.GOO') then gobview.opengob(FileName)
+  else if ext = '.CND' then gobview.opencnd(FileName)
+  else if ext = '.B3D' then gobview.openb3d(FileName)
+  else if (ext = '.DLL') or (ext = '.EXE') then gobview.opensote(FileName)
+  else if ext = '.BAF' then gobview.openbaf(FileName)
+  else Exit;
+  gobview.Show;
+  gobview.Label_FileName.Caption := FileName;
+  adpMRUContainer.AddItem(FileName);
+end;
+
+procedure TMainForm.adpMRUContainerClick(Sender: TObject; const Filename: String);
+begin
+  if not FileExists(Filename) then
+  begin
+    ShowMessage('File not found: ' + Filename);
+    Exit;
+  end;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+  VIewasTransparent1.Checked := True;
+  OpenContainer(Filename);
 end;
 
 procedure TMainForm.OpenGOBGOO1Click(Sender: TObject);
@@ -1335,8 +1704,8 @@ begin
 
   //SaveAlphaChannel1.Enabled := False;
 //  optionsform.readoptions;
-  image1.Transparent := False;
-  VIewasTransparent1.Checked := False;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+  VIewasTransparent1.Checked := True;
   image1.Picture.Bitmap.Width := 32;
   image1.Picture.Bitmap.Height := 32;
   image1.Picture.Bitmap.Assign(nil);
@@ -1344,55 +1713,11 @@ begin
   // Cell_TrackBar.Visible:=False;
 
 
-  image1.Transparent := False;
-  VIewasTransparent1.Checked := False;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+  VIewasTransparent1.Checked := True;
   OpenDialog1.Filter := 'gob/goo/baf/cnd/b3d/sote dll/exe|*.gob;*.goo;*.baf;*.cnd;*.b3d;*.dll;*.exe';
   if OpenDialog1.Execute then
-  begin
-    //Screen.Cursor := crHourGlass;
-
-    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.GOB' then
-    begin
-      gobview.opengob(OpenDialog1.FileName);
-      gobview.Show;
-      gobview.Label_FileName.Caption := OpenDialog1.Filename;
-    end;
-
-    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.GOO' then
-    begin
-      gobview.opengob(OpenDialog1.FileName);
-      gobview.Show;
-      gobview.Label_FileName.Caption := OpenDialog1.Filename;
-    end;
-
-    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.CND' then
-    begin
-      gobview.opencnd(OpenDialog1.FileName);
-      gobview.Show;
-      gobview.Label_FileName.Caption := OpenDialog1.Filename;
-    end;
-
-    if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.B3D' then
-    begin
-      gobview.openb3d(OpenDialog1.FileName);
-      gobview.Show;
-      gobview.Label_FileName.Caption := OpenDialog1.Filename;
-    end;
-
-    if (UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.DLL') or (UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.EXE') then
-    begin
-      gobview.opensote(OpenDialog1.FileName);
-      gobview.Show;
-      gobview.Label_FileName.Caption := OpenDialog1.Filename;
-    end;
-
-     if UpperCase(ExtractFileExt(OpenDialog1.FileName)) = '.BAF' then
-    begin
-      gobview.openbaf(OpenDialog1.FileName);
-      gobview.Show;
-      gobview.Label_FileName.Caption := OpenDialog1.Filename;
-    end;
-  end;
+    OpenContainer(OpenDialog1.FileName);
 end;
 
 procedure TMainForm.SaveCMPas1Click(Sender: TObject);
@@ -1436,7 +1761,7 @@ begin
 
 
  //  LightLevelRemap(63);
- SetLightLevel(63);
+ SetLightLevel(FLightLevel);
    BMPArray.RemapArrayfromCMP(MainCMP);
   TrackBarChange;
 
@@ -1478,8 +1803,9 @@ begin
   else
     VIewasTransparent1.Checked := False;
 
-  image1.Transparent := VIewasTransparent1.Checked;
-  image1.Picture.Bitmap.Transparent:=True;
+  image1.Transparent := False;
+  if (not image1.Picture.Bitmap.Empty) and (BMPArray.GetCellCount > 0) then
+    TrackBarChange;   {redraw the current cell with / without transparency}
  //  image1.Picture.Bitmap.HandleType :=  bmDIB;
  //  image1.Picture.Bitmap.alphaformat := afDefined;
  // image1.Picture.Bitmap.TransparentColor:= image1.Picture.BitMap.canvas.pixels[0,0];
@@ -1493,8 +1819,8 @@ begin
  // LoadAlpha1.Enabled := False;
   //SaveAlphaChannel1.Enabled := False;
  // optionsform.readoptions;
-  image1.Transparent := False;
-  VIewasTransparent1.Checked := False;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+  VIewasTransparent1.Checked := True;
   image1.Picture.Bitmap.Width := 32;
   image1.Picture.Bitmap.Height := 32;
   image1.Picture.Bitmap.Assign(nil);
@@ -1505,7 +1831,8 @@ end;
 
 procedure TMainForm.FormShortCut(var Msg: TWMKey; var Handled: boolean);
 begin
-  if msg.charcode = Ord('T') then
+  {plain T is swallowed; Ctrl+T is the shortcut of View as Transparent}
+  if (msg.charcode = Ord('T')) and (GetKeyState(VK_CONTROL) >= 0) then
   begin
 
     handled := True;
@@ -1520,14 +1847,23 @@ begin
 
 end;
 
+{zoom step in pixels: 10, or an eighth of the current width for big images}
+function ZoomStep(w: Integer): Integer;
+begin
+  Result := w div 8;
+  if Result < 10 then Result := 10;
+end;
+
 procedure TMainForm.In1Click(Sender: TObject);
  var
   AspectRatio:double;
 begin
   AspectRatio:=panel2.Height/panel2.Width;
 
-  panel2.Width  := panel2.Width + 10;
+  panel2.Width  := panel2.Width + ZoomStep(panel2.Width);    {steps grow with the image size}
   panel2.Height:=round(AspectRatio*panel2.Width);
+  if image1.Picture.Bitmap.Width > 0 then
+    FZoomFactor := panel2.Width / image1.Picture.Bitmap.Width;
 
 end;
 
@@ -1537,10 +1873,13 @@ procedure TMainForm.Out1Click(Sender: TObject);
 begin
    AspectRatio:=panel2.Height/panel2.Width;
 
-  if panel2.Width - 10 >= image1.Picture.Bitmap.Width  then
+  {zooming out is allowed below 100% so big textures (1024x1024...) fit in the window}
+  if panel2.Width - ZoomStep(panel2.Width) >= 16  then
    begin
-  panel2.Width  := panel2.Width - 10;
+  panel2.Width  := panel2.Width - ZoomStep(panel2.Width);
   panel2.Height:=round(AspectRatio*panel2.Width);
+  if image1.Picture.Bitmap.Width > 0 then
+    FZoomFactor := panel2.Width / image1.Picture.Bitmap.Width;
    end;
 end;
 
@@ -1548,6 +1887,7 @@ procedure TMainForm.Home1Click(Sender: TObject);
 begin
   panel2.Width  := image1.Picture.Bitmap.Width;
   panel2.Height := image1.Picture.Bitmap.Height;
+  FZoomFactor := 1;
 end;
 
 procedure TMainForm.ViewMessages1Click(Sender: TObject);
@@ -1571,8 +1911,8 @@ var
   LoadMat: TMAT;
  LoadBMParray:TBMParray;
 begin
-  image1.Transparent := False;
-  VIewasTransparent1.Checked := False;
+  image1.Transparent := False;   {transparency is composed onto a grid, not keyed from the corner pixel}
+  VIewasTransparent1.Checked := True;
 
     Screen.Cursor := crHourGlass;
 
@@ -1584,7 +1924,7 @@ begin
       matopen(FileName);
       endtime := GetTickCount;
       StatusBar1.Panels[1].Text :=
-        'mat loaded in ' + IntToStr(EndTime - StartTime) + 'mS';
+        'mat loaded in ' + IntToStr(EndTime - StartTime) + 'mS' + FAutoPalNote;
     end;
 
     if UpperCase(ExtractFileExt(FileName)) = '.BMP' then

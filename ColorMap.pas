@@ -15,6 +15,7 @@ type
     HasLightTable: Boolean;
     procedure SetDefault;
     function GetRGB:TCMPPal;
+    function GetBaseRGB:TCMPPal;      {palette without the light level remap}
     procedure SetRGB(CMPRGB:TCMPPal);
     procedure LightLevelRemap(LightLevel:integer);
     procedure LoadCMPFromFile(filename: string; pos: longint);
@@ -51,6 +52,11 @@ begin
   if IsRGBModified then
   Result:=ModCMPRGBData
   else
+  Result:=CMPRGBData;
+end;
+
+function TCMP.GetBaseRGB:TCMPPal;
+begin
   Result:=CMPRGBData;
 end;
 

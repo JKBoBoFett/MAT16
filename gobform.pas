@@ -5,9 +5,33 @@ interface
 uses
   Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Dialogs,
   StdCtrls, ExtCtrls, Grids, Math, System.Generics.Collections,
-  main, util, gobgoo,ColorMap,CMPHeaders,MATImage,BMParrays,StrUtils;
+  main, util, gobgoo,ColorMap,CMPHeaders,MATImage,BMParrays,StrUtils,AutoPalette,System.SyncObjs,MATHeaders;
 
 type
+  {thumbnail grid: clicking a partly visible bottom row selects it without scrolling the grid}
+  TGridCracker = class(TDrawGrid)
+  private
+    FFreezeTop: Integer;     {scroll position held while the mouse button is down, -1 = free}
+    FFixing: Boolean;
+  protected
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure TopLeftChanged; override;
+    procedure WMTimer(var Msg: TWMTimer); message WM_TIMER;
+  public
+    constructor Create(AOwner: TComponent); override;
+  end;
+
+  {everything a worker thread needs to build one thumbnail (no VCL objects)}
+  TThumbJob = record
+    Idx, Gen: Integer;
+    ItemName, Key, JK: string;
+    Folder: Boolean;
+    Offset: Integer;
+    BasePal: TCMPPal;
+    CmpOffs: TFileOffsets;
+  end;
+
   Tbafinfo = array[0..50] of record
     mat:    string;
     offset: integer;
@@ -54,15 +78,26 @@ type
     FTimer:     TTimer;
     FThumbs:    TObjectList<TBitmap>;
     FCmpCache:  TDictionary<string, TCMPPal>;
+    FCands:     TPalCandidates;     {colour maps tried by auto palette}
+    FCandKey:   string;
+    FLock:      TCriticalSection;   {palette caches and embedded container loads}
+    FGen:       Integer;            {changes when the thumbnail list is reset}
+    FBusy:      Boolean;            {a worker thread is building a thumbnail}
+    FDying:     Boolean;
+    FThread:    TThread;
     FBafPal:    TCMPPal;
     FBafLoaded: Boolean;
     FFolder:    Boolean;
     FKey:       string;
     FCols:      Integer;
+    function  AutoPalIdx(const container, matName: string; matOffset: Integer; const CmpOffs: TFileOffsets;
+      const cur: TCMPPal; const curName: string): Integer;
+    function  BuildThumbJob(const J: TThumbJob): TBitmap;
+    procedure StartThumb(idx: Integer);
+    procedure ThumbDone(idx, gen: Integer; bmp: TBitmap);
     procedure EnsureUI;
     procedure ResetThumbs;
     procedure UpdateGridSize;
-    function  BuildThumb(idx: Integer): TBitmap;
     procedure GridDrawCell(Sender: TObject; ACol, ARow: Integer;
       Rect: TRect; State: TGridDrawState);
     procedure GridSelectCell(Sender: TObject; ACol, ARow: Integer;
@@ -92,6 +127,9 @@ var
   Mat: TMAT;
   BMPArray: TBMPARRAY;
   bestcmp:string;
+  autoIdx,j:Integer;
+  lcCont, autoName:string;
+  lcPos:Integer;
   gobname:string;
   tempA:TBMPArray;
   gobCMP:TCMP;
@@ -125,6 +163,40 @@ begin
      Label_CMP.Caption:= bestcmp;
      pos:=GetGOBArrayOffset(CMPOffsets, bestcmp);
      gobCMP.LoadCMPFromFile(jkpath, pos);
+     lcCont := jkpath;
+     lcPos := pos;
+     {wrong colour map for this mat (custom levels, 3do mats...): look for a better one}
+     FLock.Enter;
+     try
+     autoIdx := AutoPalIdx(Label_FileName.Caption, Label_SelectedFile.Caption,
+       GetGOBArrayOffset(FileOffsets, Label_SelectedFile.Caption), CMPOffsets, gobCMP.GetRGB, bestcmp);
+     if autoIdx >= 0 then
+       begin
+       gobCMP.LoadCMPFromFile(FCands.Containers[autoIdx], FCands.Offsets[autoIdx]);
+       lcCont := FCands.Containers[autoIdx];
+       lcPos := FCands.Offsets[autoIdx];
+       autoName := FCands.Names[autoIdx];
+       Label_CMP.Caption := autoName + ' (auto)';
+       bestcmp := autoName;
+       end;
+     finally
+       FLock.Leave;
+     end;
+     {show the colour map in use in the main window's drop down}
+     j := -1;
+     for i := 0 to MainForm.ComboBox1.Items.Count - 1 do
+       if SameText(ExtractFileName(StringReplace(MainForm.ComboBox1.Items[i], '/', '\', [rfReplaceAll])),
+                   ExtractFileName(StringReplace(bestcmp, '/', '\', [rfReplaceAll]))) then
+       begin
+         j := i;
+         Break;
+       end;
+     MainForm.ComboBox1.ItemIndex := j;
+     {the main window's light levels use the light table of the colour map in use}
+     try
+       MainCMP.LoadCMPFromFile(lcCont, lcPos);
+     except
+     end;
      end;
 
    if (UpperCase(ExtractFileExt(Label_FileName.Caption)) = '.BAF') then
@@ -139,7 +211,8 @@ begin
      begin
      pos:=0;
      Label_FileName.Caption:=Label_SelectedFile.Caption;
-      Mat.SetCMP(MainCMP.GetRGB);
+      if Assigned(AutoPaletteHook) then AutoPaletteHook(Label_SelectedFile.Caption);
+      Mat.SetCMP(MainCMP.GetBaseRGB);
      end;
 
   // pos:=GetGOBFileOffset(Label_FileName.Caption,Label_SelectedFile.Caption);
@@ -151,7 +224,14 @@ begin
 
    Label_Offset.Caption := IntToStr(pos);
    if IsEmbeddedContainer(Label_FileName.Caption) then
-     tempA:= EmbeddedMatToArray(Label_FileName.Caption, pos, Mat)   {pos = material / texture page index}
+     begin
+     FLock.Enter;
+     try
+       tempA:= EmbeddedMatToArray(Label_FileName.Caption, pos, Mat);   {pos = material / texture page index}
+     finally
+       FLock.Leave;
+     end;
+     end
    else
      tempA:= Mat.LoadFromFile(Label_FileName.Caption,pos);
 
@@ -317,7 +397,7 @@ const
   CELL_W     = 128;
   CELL_H     = 146;
 
-function MakeThumb(Src: TBitmap; Is1555: Boolean): TBitmap;
+function MakeThumb(Src: TBitmap; Is1555: Boolean; Trans8: Boolean = False; Emissive: Boolean = False): TBitmap;
 var
   x, y, sx, sy, dw, dh, ox, oy, r, g, b, v: Integer;
   sc: Double;
@@ -327,8 +407,13 @@ var
   c: TColor;
   is16: Boolean;
   is8: Boolean;
+  is32: Boolean;
+  is24: Boolean;
+  a32, kk: Integer;
   pe: array[0..255] of TPaletteEntry;
   row8: PByteArray;
+  row32: PByteArray;
+  row24: PByteArray;
 begin
   Result := TBitmap.Create;
   Result.PixelFormat := pf24bit;
@@ -359,6 +444,11 @@ begin
   {8-bit: read indices and palette entries directly (Canvas.Pixels maps through the system palette)}
   is8 := (Src.PixelFormat = pf8bit) and (Src.Palette <> 0);
   if is8 then GetPaletteEntries(Src.Palette, 0, 256, pe);
+  {32-bit (Indy RGBA / ARGB mats): alpha is blended over the checkerboard}
+  is32 := Src.PixelFormat = pf32bit;
+  is24 := Src.PixelFormat = pf24bit;      {read through ScanLine, Canvas.Pixels is very slow}
+  row32 := nil;
+  row24 := nil;
 
   for y := 0 to dh - 1 do
   begin
@@ -366,6 +456,8 @@ begin
     dst := Result.ScanLine[oy + y];
     if is16 then row := Src.ScanLine[sy];
     if is8 then row8 := Src.ScanLine[sy];
+    if is32 then row32 := Src.ScanLine[sy];
+    if is24 then row24 := Src.ScanLine[sy];
     for x := 0 to dw - 1 do
     begin
       sx := x * Src.Width div dw;
@@ -374,10 +466,18 @@ begin
         w := row^[sx];
         if Is1555 then
         begin
-          if w = 0 then Continue;           { transparent }
+          if (not Emissive) and (w = 0) then Continue;           { transparent }
           r := ((w shr 10) and 31) * 255 div 31;
           g := ((w shr 5) and 31) * 255 div 31;
           b := (w and 31) * 255 div 31;
+          if Emissive then
+          begin
+            {the alpha bit is the glow mask: about 30% brightness unlit, 100% glowing}
+            if (w and $8000) <> 0 then kk := 255 else kk := 77;
+            r := r * kk div 255;
+            g := g * kk div 255;
+            b := b * kk div 255;
+          end;
         end
         else
         begin
@@ -386,8 +486,36 @@ begin
           b := (w and 31) * 255 div 31;
         end;
       end
+      else if is32 and Emissive then
+      begin
+        kk := 77 + (row32^[sx * 4 + 3] * 178) div 255;
+        b := row32^[sx * 4] * kk div 255;
+        g := row32^[sx * 4 + 1] * kk div 255;
+        r := row32^[sx * 4 + 2] * kk div 255;
+      end
+      else if is32 then
+      begin
+        a32 := row32^[sx * 4 + 3];
+        if a32 = 0 then Continue;               { fully transparent: keep the checkerboard }
+        b := row32^[sx * 4];
+        g := row32^[sx * 4 + 1];
+        r := row32^[sx * 4 + 2];
+        if a32 < 255 then
+        begin
+          b := (b * a32 + dst^[(ox + x) * 3]     * (255 - a32)) div 255;
+          g := (g * a32 + dst^[(ox + x) * 3 + 1] * (255 - a32)) div 255;
+          r := (r * a32 + dst^[(ox + x) * 3 + 2] * (255 - a32)) div 255;
+        end;
+      end
+      else if is24 then
+      begin
+        b := row24^[sx * 3];
+        g := row24^[sx * 3 + 1];
+        r := row24^[sx * 3 + 2];
+      end
       else if is8 then
       begin
+        if Trans8 and (row8^[sx] = 0) then Continue;   { palette index 0 is transparent }
         r := pe[row8^[sx]].peRed;
         g := pe[row8^[sx]].peGreen;
         b := pe[row8^[sx]].peBlue;
@@ -421,10 +549,72 @@ begin
   Result.Canvas.LineTo(20, THUMB_SIZE - 20);
 end;
 
+constructor TGridCracker.Create(AOwner: TComponent);
+begin
+  inherited;
+  FFreezeTop := -1;
+end;
+
+{a click (or the drag-scroll timer that runs while the button is held) must not scroll the grid;
+ only the scroll bar, the mouse wheel and the keyboard move it}
+procedure TGridCracker.TopLeftChanged;
+begin
+  inherited;
+  if (FFreezeTop >= 0) and (TopRow <> FFreezeTop) and (not FFixing) then
+  begin
+    FFixing := True;
+    try
+      TopRow := FFreezeTop;
+    finally
+      FFixing := False;
+    end;
+  end;
+end;
+
+{the grid's drag-scroll timer is only used while the button is held; skip it so it cannot scroll}
+procedure TGridCracker.WMTimer(var Msg: TWMTimer);
+begin
+  if FFreezeTop >= 0 then Exit;
+  inherited;
+end;
+
+procedure TGridCracker.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  if Button <> mbLeft then
+  begin
+    inherited;
+    Exit;
+  end;
+  FFreezeTop := TopRow;
+  {no drawing while the grid selects the cell: the scroll it does is undone before anything is shown}
+  SendMessage(Handle, WM_SETREDRAW, 0, 0);
+  try
+    inherited;
+    if TopRow <> FFreezeTop then TopRow := FFreezeTop;
+  finally
+    SendMessage(Handle, WM_SETREDRAW, 1, 0);
+    RedrawWindow(Handle, nil, 0, RDW_INVALIDATE or RDW_FRAME or RDW_ALLCHILDREN);
+  end;
+end;
+
+procedure TGridCracker.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+begin
+  inherited;
+  FFreezeTop := -1;
+end;
+
 destructor Tgobview.Destroy;
 begin
+  FDying := True;
+  if FThread <> nil then
+  begin
+    FThread.WaitFor;          {lets its queued completion run, which only frees the bitmap}
+    FreeAndNil(FThread);
+  end;
+  FLock.Free;
   FThumbs.Free;
   FCmpCache.Free;
+  FCands.Free;
   inherited;
 end;
 
@@ -434,6 +624,8 @@ begin
 
   FThumbs   := TObjectList<TBitmap>.Create(True);
   FCmpCache := TDictionary<string, TCMPPal>.Create;
+  FCands := TPalCandidates.Create;
+  FLock := TCriticalSection.Create;
 
   ListBox1.Visible := False;        { still used as the item store }
   Label_FileName.Visible := False;
@@ -462,7 +654,7 @@ begin
   ConvertToBmp.Parent := FBottom;
   ConvertToBmp.SetBounds(8, 40, 121, 25);
 
-  FGrid := TDrawGrid.Create(Self);
+  FGrid := TGridCracker.Create(Self);
   FGrid.Parent := Self;
   FGrid.Align := alClient;
   FGrid.BorderStyle := bsNone;
@@ -528,17 +720,186 @@ begin
       FGrid.OnSelectCell := oldSel;
     end;
   end;
+  Inc(FGen);                  {a thumbnail still being built for the old list is thrown away}
   FThumbs.Clear;
   for i := 0 to ListBox1.Items.Count - 1 do
     FThumbs.Add(nil);
-  FCmpCache.Clear;
+  FLock.Enter;
+  try
+    FCmpCache.Clear;
+    FCandKey := '';
+  finally
+    FLock.Leave;
+  end;
   FBafLoaded := False;
   FStatus.Caption := '';
   UpdateGridSize;
   FTimer.Enabled := True;
 end;
 
-function Tgobview.BuildThumb(idx: Integer): TBitmap;
+{index into FCands of a better colour map for a mat inside a gob, or -1 to keep the current one}
+function Tgobview.AutoPalIdx(const container, matName: string; matOffset: Integer; const CmpOffs: TFileOffsets;
+  const cur: TCMPPal; const curName: string): Integer;
+var
+  px: TBytes;
+  w, h: Integer;
+  trans: Boolean;
+begin
+  Result := -1;
+  if not AutoPaletteEnabled then Exit;
+  try
+    if FCandKey <> container then
+    begin
+      FCands.Clear;
+      FCands.AddFrom(CmpOffs);
+      FCands.AddFrom(gobFilesToArray(container, '.CMP'));   {colour maps shipped inside the gob itself}
+      FCandKey := container;
+    end;
+    if not ReadMatIndicesAt(container, matOffset, w, h, trans, px) then Exit;
+    Result := ChoosePalette(FCands, px, w, h, trans, cur, curName, matName);
+  except
+    Result := -1;
+  end;
+end;
+
+{Fast thumbnail for 16/24/32-bit mats: reads only mip 0 of the first cell and samples it down, instead of
+ decoding every cell and mip map.  Returns nil for other formats (8-bit, internal CMP...), the caller then
+ uses the normal loader.}
+function FastMatThumb(const fname: string; offset: Int64): TBitmap;
+var
+  fs: TFileStream;
+  hd: TMatHeader;
+  mh: TTextureMipmapHeader;
+  buf: TBytes;
+  w, h, bpp, dw, dh, x, y, sx, sy, o, kind: Integer;
+  v: Word;
+  smallBmp: TBitmap;
+  d: PByteArray;
+  emis: Boolean;
+  sR, sG, sB, sA: Integer;
+begin
+  Result := nil;
+  try
+    fs := TFileStream.Create(fname, fmOpenRead or fmShareDenyNone);
+  except
+    Exit;
+  end;
+  try
+    if fs.Size < offset + SizeOf(hd) then Exit;
+    fs.Position := offset;
+    fs.ReadBuffer(hd, SizeOf(hd));
+    if (hd.tag <> 'MAT ') or (hd.ver <> 50) or (hd.mat_Type <> 2) or (hd.cel_count < 1) then Exit;
+    if (hd.record_count < 0) or (hd.record_count > 10000) then Exit;
+    if not (hd.bits in [16, 24, 32]) then Exit;
+    fs.Seek(Int64(hd.record_count) * SizeOf(TTextureHeader), soCurrent);
+    if fs.Position + SizeOf(mh) > fs.Size then Exit;
+    fs.ReadBuffer(mh, SizeOf(mh));
+    w := mh.SizeX;
+    h := mh.SizeY;
+    if (w < 1) or (h < 1) or (w > 8192) or (h > 8192) then Exit;
+    bpp := hd.bits div 8;
+    if fs.Position + Int64(w) * h * bpp > fs.Size then Exit;
+
+    {same format rules as TMAT.toBMP}
+    kind := 0;   {1 = 565, 2 = 1555, 3 = 5551, 4 = 4444, 5 = 24 bit, 6 = 32 bit}
+    emis := mh.TransparentBool = 2;
+    if (hd.bits = 16) and (hd.ColorMode = 1) then
+    begin
+      kind := 1;
+      if mh.TransparentBool = 1 then kind := 2;
+      if emis and (hd.alpha_bpp = 1) and (hd.greenbits = 5) then kind := 2;
+    end
+    else if (hd.bits = 16) and (hd.ColorMode = 2) and (hd.alpha_bpp = 1) then kind := 3
+    else if (hd.bits = 16) and (hd.ColorMode = 2) and (hd.alpha_bpp = 4) then kind := 4
+    else if hd.bits = 24 then kind := 5
+    else if (hd.bits = 32) and (hd.ColorMode = 2) and (hd.alpha_bpp = 8) then kind := 6;
+    if kind = 0 then Exit;
+    if (kind = 1) then emis := False;      {565 has no glow mask}
+
+    sR := 11; sG := 6; sB := 1; sA := 0;
+    if kind = 4 then begin sR := 12; sG := 8; sB := 4; sA := 0; end;
+    if (kind in [3, 4]) and (hd.alpha_sh <> 0) then
+    begin
+      sR := hd.shiftR; sG := hd.shiftG; sB := hd.shiftB; sA := hd.alpha_sh;
+    end;
+
+    SetLength(buf, w * h * bpp);
+    fs.ReadBuffer(buf[0], Length(buf));
+  finally
+    fs.Free;
+  end;
+
+  {sample down to at most 120 x 120 into a small 32-bit bitmap with an alpha channel}
+  dw := Min(w, THUMB_SIZE);
+  dh := Min(h, THUMB_SIZE);
+  smallBmp := TBitmap.Create;
+  try
+    smallBmp.PixelFormat := pf32bit;
+    smallBmp.AlphaFormat := afIgnored;
+    smallBmp.SetSize(dw, dh);
+    for y := 0 to dh - 1 do
+    begin
+      sy := y * h div dh;
+      d := smallBmp.ScanLine[y];
+      for x := 0 to dw - 1 do
+      begin
+        sx := x * w div dw;
+        o := (sy * w + sx) * bpp;
+        case kind of
+          1: begin   {RGB565}
+               v := Word(Integer(buf[o]) or (Integer(buf[o + 1]) shl 8));
+               d^[x * 4]     := ((v and 31) * 255) div 31;
+               d^[x * 4 + 1] := (((v shr 5) and 63) * 255) div 63;
+               d^[x * 4 + 2] := (((v shr 11) and 31) * 255) div 31;
+               d^[x * 4 + 3] := 255;
+             end;
+          2: begin   {ARGB1555: word 0 is transparent, in emissive mats bit 15 is the glow mask}
+               v := Word(Integer(buf[o]) or (Integer(buf[o + 1]) shl 8));
+               d^[x * 4]     := ((v and 31) * 255) div 31;
+               d^[x * 4 + 1] := (((v shr 5) and 31) * 255) div 31;
+               d^[x * 4 + 2] := (((v shr 10) and 31) * 255) div 31;
+               if emis then
+                 begin if (v and $8000) <> 0 then d^[x * 4 + 3] := 255 else d^[x * 4 + 3] := 0; end
+               else
+                 begin if v = 0 then d^[x * 4 + 3] := 0 else d^[x * 4 + 3] := 255; end;
+             end;
+          3: begin   {RGBA5551}
+               v := Word(Integer(buf[o]) or (Integer(buf[o + 1]) shl 8));
+               d^[x * 4]     := ((v shr sB) and 31) shl 3;
+               d^[x * 4 + 1] := ((v shr sG) and 31) shl 3;
+               d^[x * 4 + 2] := ((v shr sR) and 31) shl 3;
+               d^[x * 4 + 3] := ((v shr sA) and 1) * 255;
+             end;
+          4: begin   {RGBA4444}
+               v := Word(Integer(buf[o]) or (Integer(buf[o + 1]) shl 8));
+               d^[x * 4]     := ((v shr sB) and 15) * 17;
+               d^[x * 4 + 1] := ((v shr sG) and 15) * 17;
+               d^[x * 4 + 2] := ((v shr sR) and 15) * 17;
+               d^[x * 4 + 3] := ((v shr sA) and 15) * 17;
+             end;
+          5: begin   {24-bit, stored B G R}
+               d^[x * 4]     := buf[o];
+               d^[x * 4 + 1] := buf[o + 1];
+               d^[x * 4 + 2] := buf[o + 2];
+               d^[x * 4 + 3] := 255;
+             end;
+        else
+          begin      {32-bit, stored B G R A}
+            d^[x * 4]     := buf[o];
+            d^[x * 4 + 1] := buf[o + 1];
+            d^[x * 4 + 2] := buf[o + 2];
+            d^[x * 4 + 3] := buf[o + 3];
+          end;
+        end;
+      end;
+    end;
+    Result := MakeThumb(smallBmp, False, False, emis);
+  finally
+    smallBmp.Free;
+  end;
+end;
+
+function Tgobview.BuildThumbJob(const J: TThumbJob): TBitmap;
 var
   itemName, ext, best: string;
   Mat: TMAT;
@@ -551,33 +912,47 @@ begin
   Result := nil;
   Mat := nil;
   arr := nil;
-  itemName := ListBox1.Items[idx];
+  itemName := J.ItemName;
+  {16/24/32-bit mats of a folder or a gob: sample the file directly}
+  if J.Folder then
+    Result := FastMatThumb(itemName, 0)
+  else if ((UpperCase(ExtractFileExt(J.Key)) = '.GOB') or (UpperCase(ExtractFileExt(J.Key)) = '.GOO')) and
+          (not IsEmbeddedContainer(J.Key)) and (J.Offset >= 0) then
+    Result := FastMatThumb(J.Key, J.Offset);
+  if Result <> nil then Exit;
   try
     try
       Mat := TMAT.Create(TFormat.BMP);
-      if FFolder then
+      if J.Folder then
       begin
-        Mat.SetCMP(MainCMP.GetRGB);
+        Mat.SetCMP(J.BasePal);
         arr := Mat.LoadFromFile(itemName, 0);
       end
       else
       begin
-        ext := UpperCase(ExtractFileExt(FKey));
-        pal := MainCMP.GetRGB;
-        if ((ext = '.GOB') or (ext = '.GOO')) and (not IsEmbeddedContainer(FKey)) then
+        ext := UpperCase(ExtractFileExt(J.Key));
+        pal := J.BasePal;
+        if ((ext = '.GOB') or (ext = '.GOO')) and (not IsEmbeddedContainer(J.Key)) then
         begin
-          best := GetbestCMP(itemName, JKPath);
+          FLock.Enter;
+          try
+          best := GetbestCMP(itemName, J.JK);
           if not FCmpCache.TryGetValue(best, pal) then
           begin
             cmp := TCMP.Create;
             try
-              p := GetGOBArrayOffset(CMPOffsets, best);
-              cmp.LoadCMPFromFile(jkpath, p);
+              p := GetGOBArrayOffset(J.CmpOffs, best);
+              cmp.LoadCMPFromFile(J.JK, p);
               pal := cmp.GetRGB;
             finally
               cmp.Free;
             end;
             FCmpCache.Add(best, pal);
+          end;
+          p := AutoPalIdx(J.Key, itemName, J.Offset, J.CmpOffs, pal, best);
+          if p >= 0 then pal := FCands.Pals[p];
+          finally
+            FLock.Leave;
           end;
         end
         else if ext = '.BAF' then
@@ -586,7 +961,7 @@ begin
           begin
             cmp := TCMP.Create;
             try
-              cmp.LoadCMPFromBAFFile(FKey, 336);
+              cmp.LoadCMPFromBAFFile(J.Key, 336);
               FBafPal := cmp.GetRGB;
             finally
               cmp.Free;
@@ -596,17 +971,25 @@ begin
           pal := FBafPal;
         end;
         Mat.SetCMP(pal);
-        if IsEmbeddedContainer(FKey) then
-          arr := EmbeddedMatToArray(FKey, GetGOBArrayOffset(FileOffsets, itemName), Mat)
+        if IsEmbeddedContainer(J.Key) then
+        begin
+          FLock.Enter;           {the container readers keep shared caches}
+          try
+            arr := EmbeddedMatToArray(J.Key, J.Offset, Mat);
+          finally
+            FLock.Leave;
+          end;
+        end
         else
-          arr := Mat.LoadFromFile(FKey, GetGOBArrayOffset(FileOffsets, itemName));
+          arr := Mat.LoadFromFile(J.Key, J.Offset);
       end;
 
       if (arr <> nil) and (arr.GetCellCount > 0) then
       begin
         cell := arr.GetCell(0);
         try
-          Result := MakeThumb(cell, ContainsText(arr.fmt, '1555'));
+          {emissive: the alpha bit is the glow mask, not transparency}
+          Result := MakeThumb(cell, ContainsText(arr.fmt, '1555'), arr.isTransparent, IsEmissiveFmt(arr.fmt));
         finally
           cell.Free;
         end;
@@ -626,14 +1009,98 @@ begin
     arr.Free;
     Mat.Free;
   end;
-  if Result = nil then Result := MakeErrorThumb;
+end;   {nil = failed, the main thread draws the error thumbnail}
+
+type
+  TThumbThread = class(TThread)
+  private
+    FOwner: Tgobview;
+    FJob: TThumbJob;
+    FResult: TBitmap;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AOwner: Tgobview; const AJob: TThumbJob);
+  end;
+
+constructor TThumbThread.Create(AOwner: Tgobview; const AJob: TThumbJob);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FOwner := AOwner;
+  FJob := AJob;
+end;
+
+procedure TThumbThread.Execute;
+begin
+  try
+    FResult := FOwner.BuildThumbJob(FJob);
+  except
+    FResult := nil;
+  end;
+  TThread.Synchronize(Self,
+    procedure
+    begin
+      FOwner.ThumbDone(FJob.Idx, FJob.Gen, FResult);
+    end);
+end;
+
+{main thread: hands one thumbnail to a worker thread so the window stays responsive}
+procedure Tgobview.StartThumb(idx: Integer);
+var
+  J: TThumbJob;
+begin
+  J.Idx := idx;
+  J.Gen := FGen;
+  J.ItemName := ListBox1.Items[idx];
+  J.Key := FKey;
+  J.JK := JKPath;
+  J.Folder := FFolder;
+  J.BasePal := MainCMP.GetBaseRGB;
+  J.CmpOffs := CMPOffsets;
+  J.Offset := -1;
+  if not FFolder then
+    try
+      J.Offset := GetGOBArrayOffset(FileOffsets, J.ItemName);
+    except
+      J.Offset := -1;
+    end;
+  FBusy := True;
+  FreeAndNil(FThread);
+  FThread := TThumbThread.Create(Self, J);
+  FThread.Start;
+end;
+
+procedure Tgobview.ThumbDone(idx, gen: Integer; bmp: TBitmap);
+var
+  n, i, done: Integer;
+begin
+  FBusy := False;
+  if FDying or (gen <> FGen) or (idx >= FThumbs.Count) then
+  begin
+    bmp.Free;                  {list was replaced while this one was being built}
+    Exit;
+  end;
+  if bmp = nil then bmp := MakeErrorThumb;
+  FThumbs[idx] := bmp;
+
+  n := FThumbs.Count;
+  done := 0;
+  for i := 0 to n - 1 do
+    if FThumbs[i] <> nil then Inc(done);
+  FStatus.Caption := 'Building thumbnails ' + IntToStr(done) + ' / ' + IntToStr(n);
+  if FCols > 0 then
+    TGridCracker(FGrid).InvalidateCell(idx mod FCols, idx div FCols)
+  else
+    FGrid.Invalidate;
 end;
 
 procedure Tgobview.TimerTick(Sender: TObject);
 var
-  n, i, first, last, found, done: Integer;
+  n, i, first, last, found: Integer;
 begin
   if FGrid = nil then Exit;
+  if FBusy then Exit;          {one thumbnail at a time, built off the main thread}
 
   if (not FFolder) and (Label_FileName.Caption <> FKey) then
   begin
@@ -664,18 +1131,7 @@ begin
     Exit;
   end;
 
-  FTimer.Enabled := False;      { no re-entry while loading }
-  try
-    FThumbs[found] := BuildThumb(found);
-  finally
-    FTimer.Enabled := True;
-  end;
-
-  done := 0;
-  for i := 0 to n - 1 do
-    if FThumbs[i] <> nil then Inc(done);
-  FStatus.Caption := 'Building thumbnails ' + IntToStr(done) + ' / ' + IntToStr(n);
-  FGrid.Invalidate;
+  StartThumb(found);
 end;
 
 procedure Tgobview.GridDrawCell(Sender: TObject; ACol, ARow: Integer;

@@ -899,6 +899,7 @@ var
   cmp:TCMPPal;
   sl: PUInt64;
   sR,sG,sB,sA: integer;
+  rowbuf: array of word;
 //  Bsrc:byte;
 //  IndexArray: PByteArray;
 begin
@@ -952,12 +953,14 @@ begin
    bmap.PixelFormat := pf32bit;
    bmap.HandleType :=  bmDIB;
    bmap.Alphaformat := afDefined;
+    SetLength(rowbuf, bmap.Width);
     for j := 0 to bmap.Height - 1 do
     begin
       inrow := bmap.ScanLine[j];
+      BlockRead(f, rowbuf[0], bmap.Width * 2);      {one read per row, not per pixel}
       for i := 0 to bmap.Width - 1 do
       begin
-        BlockRead(f, src, sizeof(src));
+        src := rowbuf[i];
         inrow[i].rgbRed := ((src shr sR) and 31) shl 3;
         inrow[i].rgbGreen := ((src shr sG) and 31) shl 3;
         inrow[i].rgbBlue := ((src shr sB) and 31) shl 3;
@@ -983,12 +986,14 @@ begin
    bmap.PixelFormat := pf32bit;
    bmap.HandleType :=  bmDIB;
    bmap.Alphaformat := afIgnored;  {setting as defined seems to cause pre multiplication after conversion}
+    SetLength(rowbuf, bmap.Width);
     for j := 0 to bmap.Height - 1 do
     begin
       inrow := bmap.ScanLine[j];
+      BlockRead(f, rowbuf[0], bmap.Width * 2);      {one read per row, not per pixel}
       for i := 0 to bmap.Width - 1 do
       begin
-        BlockRead(f, src, sizeof(src));
+        src := rowbuf[i];
         inrow^[i].rgbRed := ((src shr sR) and 15) * 17;
         inrow^[i].rgbGreen := ((src shr sG) and 15) * 17;
         inrow^[i].rgbBlue := ((src shr sB) and 15) * 17;
